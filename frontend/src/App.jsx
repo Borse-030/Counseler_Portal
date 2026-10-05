@@ -94,9 +94,16 @@ function AppContent({ themeMode, toggleTheme }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState(0); // 0 = Login, 1 = Register
   
-  // Auth Form State
+  // Auth Form State (User Registration)
   const [name, setName] = useState('');
-  const [role, setRole] = useState('patient'); // default register role
+  const [email, setEmail] = useState('');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('Male');
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
+  const [preferredLanguage, setPreferredLanguage] = useState('English');
+  const [preferredCounselingMode, setPreferredCounselingMode] = useState('Online');
+  const [counselingRequirements, setCounselingRequirements] = useState('');
   
   // Counselor Specific Fields
   const [specialty, setSpecialty] = useState('');
@@ -124,8 +131,15 @@ function AppContent({ themeMode, toggleTheme }) {
   const handleOpenAuth = () => {
     setAuthError('');
     setName('');
-    setRole('patient');
     setMobile('');
+    setEmail('');
+    setDob('');
+    setGender('Male');
+    setState('');
+    setCity('');
+    setPreferredLanguage('English');
+    setPreferredCounselingMode('Online');
+    setCounselingRequirements('');
     setOtp('');
     setOtpSent(false);
     setOtpSuccessMsg('');
@@ -184,11 +198,11 @@ function AppContent({ themeMode, toggleTheme }) {
     }
   };
 
-  // Standard Register Submit (OTP based)
+  // Standard Register Submit (User Registration)
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    if (!name || !mobile || !otp) {
-      setAuthError('Please fill in all required fields (Name, Mobile, and OTP).');
+    if (!name || !mobile) {
+      setAuthError('Please fill in required fields (Full Name and Mobile Number).');
       return;
     }
 
@@ -197,8 +211,13 @@ function AppContent({ themeMode, toggleTheme }) {
       return;
     }
 
-    if (role === 'counselor' && (!specialty || !credentials)) {
-      setAuthError('Please fill in all therapist credentials.');
+    if (!otpSent) {
+      await handleSendOtp(e);
+      return;
+    }
+
+    if (!otp) {
+      setAuthError('Please enter the OTP verification code sent to your mobile.');
       return;
     }
 
@@ -208,11 +227,16 @@ function AppContent({ themeMode, toggleTheme }) {
       const payload = {
         otp,
         name,
-        role,
+        role: 'user',
         mobile,
-        specialty,
-        bio,
-        credentials
+        email,
+        dob,
+        gender,
+        state,
+        city,
+        preferredLanguage,
+        preferredCounselingMode,
+        counselingRequirements
       };
       const data = await api.register(payload);
       setCurrentUser(data.user);
@@ -221,16 +245,18 @@ function AppContent({ themeMode, toggleTheme }) {
       // Reset form states
       setName('');
       setMobile('');
+      setEmail('');
+      setDob('');
+      setGender('Male');
+      setState('');
+      setCity('');
+      setPreferredLanguage('English');
+      setPreferredCounselingMode('Online');
+      setCounselingRequirements('');
       setOtp('');
       setOtpSent(false);
       setOtpSuccessMsg('');
 
-      if (role === 'counselor') {
-        setSnackbarMsg('Registration successful! Counselor applications are submitted for Admin verification. You will be activated once verified.');
-        setSnackbarSeverity('success');
-        setSnackbarOpen(true);
-      }
-      
       navigate('/dashboard');
     } catch (err) {
       setAuthError(err.message || 'Registration failed.');
@@ -271,7 +297,7 @@ function AppContent({ themeMode, toggleTheme }) {
   };
 
   const renderBookSessionLink = () => {
-    if (!currentUser || currentUser.role !== 'patient') return null;
+    if (!currentUser || (currentUser.role !== 'patient' && currentUser.role !== 'user')) return null;
     return (
       <Button 
         component={Link} 
@@ -424,7 +450,7 @@ function AppContent({ themeMode, toggleTheme }) {
           <Route 
             path="/dashboard" 
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenAuth} allowedRoles={['patient', 'counselor']}>
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenAuth} allowedRoles={['patient', 'user', 'counselor']}>
                 {currentUser?.role === 'counselor' ? (
                   <CounselorDashboard currentUser={currentUser} />
                 ) : (
@@ -546,106 +572,156 @@ function AppContent({ themeMode, toggleTheme }) {
               )}
             </Box>
           ) : (
-            // Register Form (Mobile + OTP)
+            // Register Form (User Registration)
             <form onSubmit={handleRegisterSubmit}>
-              <TextField
-                label="Full Name"
-                fullWidth
-                margin="normal"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <TextField
-                label="Mobile Number"
-                placeholder="e.g. 9876543210"
-                fullWidth
-                margin="normal"
-                required
-                disabled={otpSent}
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                inputProps={{ maxLength: 10 }}
-              />
-              
-              {otpSent ? (
-                <>
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                <Grid item xs={12} sm={6}>
                   <TextField
-                    label="OTP Verification Code"
-                    placeholder="Enter 123456"
+                    label="Full Name"
                     fullWidth
-                    margin="normal"
                     required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    autoFocus
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                   />
-                  
-                  <FormControl fullWidth margin="normal">
-                    <InputLabel>Register Role</InputLabel>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Mobile Number"
+                    placeholder="e.g. 9876543210"
+                    fullWidth
+                    required
+                    disabled={otpSent}
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    inputProps={{ maxLength: 10 }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Email Address"
+                    type="email"
+                    placeholder="e.g. user@example.com"
+                    fullWidth
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Date of Birth (DOB)"
+                    type="date"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Gender</InputLabel>
                     <Select
-                      value={role}
-                      label="Register Role"
-                      onChange={(e) => setRole(e.target.value)}
+                      value={gender}
+                      label="Gender"
+                      onChange={(e) => setGender(e.target.value)}
                     >
-                      <MenuItem value="patient">Patient Client</MenuItem>
-                      <MenuItem value="counselor">Therapist Counselor</MenuItem>
+                      <MenuItem value="Male">Male</MenuItem>
+                      <MenuItem value="Female">Female</MenuItem>
+                      <MenuItem value="Other">Other</MenuItem>
+                      <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
                     </Select>
                   </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    label="State"
+                    fullWidth
+                    placeholder="e.g. Maharashtra"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    label="City"
+                    fullWidth
+                    placeholder="e.g. Mumbai"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Preferred Language</InputLabel>
+                    <Select
+                      value={preferredLanguage}
+                      label="Preferred Language"
+                      onChange={(e) => setPreferredLanguage(e.target.value)}
+                    >
+                      <MenuItem value="English">English</MenuItem>
+                      <MenuItem value="Hindi">Hindi</MenuItem>
+                      <MenuItem value="Marathi">Marathi</MenuItem>
+                      <MenuItem value="Gujarati">Gujarati</MenuItem>
+                      <MenuItem value="Bengali">Bengali</MenuItem>
+                      <MenuItem value="Tamil">Tamil</MenuItem>
+                      <MenuItem value="Telugu">Telugu</MenuItem>
+                      <MenuItem value="Kannada">Kannada</MenuItem>
+                      <MenuItem value="Other">Other</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Preferred Counseling Mode</InputLabel>
+                    <Select
+                      value={preferredCounselingMode}
+                      label="Preferred Counseling Mode"
+                      onChange={(e) => setPreferredCounselingMode(e.target.value)}
+                    >
+                      <MenuItem value="Online">Online</MenuItem>
+                      <MenuItem value="Offline">Offline</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Briefly describe your counseling requirements"
+                    multiline
+                    rows={3}
+                    fullWidth
+                    placeholder="Describe what counseling or support you are looking for..."
+                    value={counselingRequirements}
+                    onChange={(e) => setCounselingRequirements(e.target.value)}
+                  />
+                </Grid>
+              </Grid>
 
-                  {role === 'counselor' && (
-                    <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 3, maxHeight: '200px', overflowY: 'auto' }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Therapist License Credentials</Typography>
-                      <TextField
-                        label="Medical Specialty"
-                        fullWidth
-                        margin="dense"
-                        placeholder="e.g. Cognitive Behavioral Therapy, Anxiety"
-                        value={specialty}
-                        onChange={(e) => setSpecialty(e.target.value)}
-                      />
-                      <TextField
-                        label="Licensure Verification Documents"
-                        fullWidth
-                        margin="dense"
-                        placeholder="e.g. Licensed LCSW #39420"
-                        value={credentials}
-                        onChange={(e) => setCredentials(e.target.value)}
-                      />
-                      <TextField
-                        label="Bio / Professional Biography"
-                        multiline
-                        rows={2}
-                        fullWidth
-                        margin="dense"
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                      />
-                    </Box>
-                  )}
-
-                  <Button 
-                    type="submit" 
-                    variant="contained" 
-                    fullWidth 
-                    sx={{ mt: 3, py: 1.25, borderRadius: 2, fontWeight: 600 }}
-                    disabled={authLoading}
-                  >
-                    {authLoading ? <CircularProgress size={24} /> : 'Create Account'}
-                  </Button>
-                </>
-              ) : (
-                <Button 
-                  type="button" 
-                  variant="contained" 
-                  fullWidth 
-                  sx={{ mt: 3, py: 1.25, borderRadius: 2, fontWeight: 600 }}
-                  disabled={authLoading}
-                  onClick={handleSendOtp}
-                >
-                  {authLoading ? <CircularProgress size={24} /> : 'Send OTP Code'}
-                </Button>
+              {otpSent && (
+                <TextField
+                  label="OTP Verification Code"
+                  placeholder="Enter 123456"
+                  fullWidth
+                  margin="normal"
+                  required
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  autoFocus
+                  sx={{ mt: 2 }}
+                />
               )}
+
+              <Button 
+                type="submit" 
+                variant="contained" 
+                fullWidth 
+                sx={{ mt: 3, py: 1.25, borderRadius: 2, fontWeight: 600 }}
+                disabled={authLoading}
+              >
+                {authLoading ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  otpSent ? 'Submit & Create Account' : 'Send OTP Code'
+                )}
+              </Button>
             </form>
           )}
           {otpSent && authTab === 1 && (

@@ -50,6 +50,11 @@ router.post('/login', async (req, res) => {
         mobile: user.mobile,
         gender: user.gender,
         dob: user.dob,
+        state: user.state,
+        city: user.city,
+        preferredLanguage: user.preferredLanguage,
+        preferredCounselingMode: user.preferredCounselingMode,
+        counselingRequirements: user.counselingRequirements,
         specialty: user.specialty,
         price: user.price,
         bio: user.bio,
@@ -70,9 +75,9 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   const { 
-    otp, name, role, 
-    mobile, gender, dob, // patient/general
-    specialty, bio, credentials, experience, registrationNumber, certificates, languages // counselor specific
+    otp, name, role, email,
+    mobile, gender, dob, state, city, preferredLanguage, preferredCounselingMode, counselingRequirements,
+    specialty, bio, credentials, experience, registrationNumber, certificates, languages
   } = req.body;
   
   if (!mobile || !otp) {
@@ -90,24 +95,27 @@ router.post('/register', async (req, res) => {
     }
 
     // Auto-generate unique placeholder email based on mobile number
-    const constructedEmail = `${mobile.replace(/\D/g, '') || Date.now()}@mindease.com`;
+    const finalRole = role || 'user';
+    const constructedEmail = (email && email.trim()) ? email.trim() : `${mobile.replace(/\D/g, '') || Date.now()}@mindease.com`;
 
-    const userId = `${role}_${Date.now()}`;
+    const userId = `${finalRole}_${Date.now()}`;
     const newUser = new User({
       id: userId,
       email: constructedEmail,
       password: '', // OTP login used instead
       name,
-      role,
+      role: finalRole,
       mobile: mobile,
-      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`, // dynamic SVG avatar
+      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
+      gender: gender || 'unspecified',
+      dob: dob || '',
+      state: state || '',
+      city: city || '',
+      preferredLanguage: preferredLanguage || 'English',
+      preferredCounselingMode: preferredCounselingMode || 'Online',
+      counselingRequirements: counselingRequirements || '',
       createdAt: new Date()
     });
-
-    if (role === 'patient') {
-      newUser.gender = gender || 'unspecified';
-      newUser.dob = dob || '';
-    }
 
     if (role === 'counselor') {
       newUser.specialty = specialty || 'General Therapy';
@@ -165,6 +173,11 @@ router.post('/register', async (req, res) => {
         mobile: newUser.mobile,
         gender: newUser.gender,
         dob: newUser.dob,
+        state: newUser.state,
+        city: newUser.city,
+        preferredLanguage: newUser.preferredLanguage,
+        preferredCounselingMode: newUser.preferredCounselingMode,
+        counselingRequirements: newUser.counselingRequirements,
         specialty: newUser.specialty,
         price: newUser.price,
         bio: newUser.bio,
@@ -249,6 +262,11 @@ router.post('/mobile-otp-verify', async (req, res) => {
         mobile: user.mobile,
         gender: user.gender,
         dob: user.dob,
+        state: user.state,
+        city: user.city,
+        preferredLanguage: user.preferredLanguage,
+        preferredCounselingMode: user.preferredCounselingMode,
+        counselingRequirements: user.counselingRequirements,
         specialty: user.specialty,
         price: user.price,
         bio: user.bio,

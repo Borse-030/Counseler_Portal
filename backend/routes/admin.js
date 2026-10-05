@@ -91,7 +91,7 @@ router.get('/transactions', authenticateAdmin, async (req, res) => {
 router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
     const counselorsCount = await User.countDocuments({ role: 'counselor' });
-    const patientsCount = await User.countDocuments({ role: 'patient' });
+    const patientsCount = await User.countDocuments({ role: { $in: ['patient', 'user'] } });
     const activeBookingsCount = await Appointment.countDocuments({ status: 'upcoming' });
     const completedBookingsCount = await Appointment.countDocuments({ status: 'completed' });
     const totalBookingsCount = await Appointment.countDocuments({});
@@ -147,7 +147,7 @@ router.post('/users', authenticateAdmin, async (req, res) => {
       createdAt: new Date()
     });
 
-    if (role === 'patient') {
+    if ((role === 'patient' || role === 'user')) {
       newUser.gender = gender || 'unspecified';
       newUser.dob = dob || '';
     }

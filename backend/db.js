@@ -4,7 +4,7 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/Appoin
 
 mongoose.connect(MONGODB_URI)
   .then(async () => {
-    console.log(`Connected to MongoDB at ${MONGODB_URI}`);
+    console.log(`Connected to MongoDB `);
     try {
       const userCount = await User.countDocuments({});
       if (userCount === 0) {
@@ -23,11 +23,16 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, default: '' },
   name: { type: String, required: true },
-  role: { type: String, required: true, enum: ['patient', 'counselor', 'admin'] },
+  role: { type: String, required: true, enum: ['user', 'patient', 'counselor', 'admin'], default: 'user' },
   avatar: { type: String, default: '' },
   mobile: { type: String, default: '' },
   gender: { type: String, default: 'unspecified' },
   dob: { type: String, default: '' },
+  state: { type: String, default: '' },
+  city: { type: String, default: '' },
+  preferredLanguage: { type: String, default: 'English' },
+  preferredCounselingMode: { type: String, default: 'Online' },
+  counselingRequirements: { type: String, default: '' },
   specialty: { type: String, default: '' },
   price: { type: Number, default: 0 },
   bio: { type: String, default: '' },
@@ -203,7 +208,7 @@ const defaultSeedData = () => {
       email: 'patient@demo.com',
       password: 'password',
       name: 'Jane Doe',
-      role: 'patient',
+      role: 'user',
       avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
       mobile: '+1 (555) 019-2834',
       gender: 'female',
@@ -475,7 +480,7 @@ const defaultSeedData = () => {
     { id: 'Sarah_Audio', counselorId: counselor1Id, name: 'Audio Consultation', duration: 45, price: 0, bufferTime: 15, description: 'Private phone-call consultation.' },
     { id: 'Sarah_Chat', counselorId: counselor1Id, name: 'Chat Consultation', duration: 30, price: 0, bufferTime: 10, description: 'Secure real-time texting session.' },
     { id: 'Sarah_InPerson', counselorId: counselor1Id, name: 'In-Person Consultation', duration: 60, price: 0, bufferTime: 30, description: 'In-office therapy at MindEase clinic (Room 302).' },
-    
+
     { id: 'Michael_Video', counselorId: counselor2Id, name: 'Video Consultation', duration: 60, price: 0, bufferTime: 15, description: 'Direct face-to-face video therapy.' },
     { id: 'Michael_Audio', counselorId: counselor2Id, name: 'Audio Consultation', duration: 45, price: 0, bufferTime: 15, description: 'Private phone-call consultation.' },
     { id: 'Michael_InPerson', counselorId: counselor2Id, name: 'In-Person Consultation', duration: 60, price: 0, bufferTime: 30, description: 'In-office therapy at MindEase clinic (Room 105).' }

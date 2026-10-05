@@ -47,7 +47,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     let filtered = [];
-    if (currentUser.role === 'patient') {
+    if ((currentUser.role === 'patient' || currentUser.role === 'user')) {
       filtered = await Appointment.find({ patientId: req.userId });
     } else if (currentUser.role === 'counselor') {
       filtered = await Appointment.find({ counselorId: req.userId });
@@ -102,7 +102,7 @@ router.post('/', authenticate, async (req, res) => {
   const { counselorId, date, time, intakeNotes, paymentDetails, appointmentType, paymentGateway } = req.body;
 
   try {
-    const patient = await User.findOne({ id: req.userId, role: 'patient' });
+    const patient = await User.findOne({ id: req.userId, role: { $in: ['patient', 'user'] } });
     const counselor = await User.findOne({ id: counselorId, role: 'counselor', approved: true });
 
     if (!patient) {

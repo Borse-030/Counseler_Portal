@@ -1,3 +1,6 @@
+import 'dotenv/config';
+import crypto from 'crypto';
+if (!globalThis.crypto) { globalThis.crypto = crypto.webcrypto || crypto; }
 import express from 'express';
 import cors from 'cors';
 import { db } from './db.js';
@@ -57,7 +60,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong on the server!' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`MindEase server is running on http://localhost:${PORT}`);
   console.log(`Using MongoDB database connection.`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Error: Port ${PORT} is already in use by another process.`);
+    console.error(`Please terminate the process using port ${PORT} or set a different PORT in .env.`);
+    process.exit(1);
+  }
 });
