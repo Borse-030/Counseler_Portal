@@ -22,11 +22,13 @@ const validateMobile = (num) => {
 };
 
 // Pages imports
-import Landing from './pages/Landing';
+import LandingPage from './pages/LandingPage/LandingPage';
 import PatientDashboard from './pages/PatientDashboard';
 import CounselorDashboard from './pages/CounselorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SessionRoom from './pages/SessionRoom';
+
+const isMobile = window.innerWidth <= 600
 
 // Custom wrapper to protect routes based on auth status and roles
 function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired }) {
@@ -383,11 +385,11 @@ function AppContent({ themeMode, toggleTheme }) {
             )}
 
             {/* Light/Dark mode toggler */}
-            <Tooltip title="Toggle light/dark theme">
+            {/* <Tooltip title="Toggle light/dark theme">
               <IconButton onClick={toggleTheme} color="inherit">
                 {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
               </IconButton>
-            </Tooltip>
+            </Tooltip> */}
 
             {/* Auth options */}
             {currentUser ? (
@@ -425,7 +427,7 @@ function AppContent({ themeMode, toggleTheme }) {
               <Button 
                 variant="contained" 
                 onClick={handleOpenAuth}
-                startIcon={<AccountCircleIcon />}
+                startIcon={ isMobile ? null : <AccountCircleIcon />}
               >
                 Sign In
               </Button>
@@ -440,9 +442,9 @@ function AppContent({ themeMode, toggleTheme }) {
           <Route 
             path="/" 
             element={
-              <Landing 
-                onAuthRedirect={handleOpenAuth} 
-                currentUser={currentUser} 
+              <LandingPage
+                // onAuthRedirect={handleOpenAuth} 
+                // currentUser={currentUser} 
               />
             } 
           />
