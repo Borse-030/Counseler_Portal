@@ -10,6 +10,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import SpaIcon from '@mui/icons-material/Spa';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -22,7 +23,7 @@ const validateMobile = (num) => {
 };
 
 // Pages imports
-import LandingPage from './pages/LandingPage/LandingPage';
+import SessionRequest from './pages/SessionRequest';
 import PatientDashboard from './pages/PatientDashboard';
 import CounselorDashboard from './pages/CounselorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -291,9 +292,15 @@ function AppContent({ themeMode, toggleTheme }) {
         component={Link} 
         to={path} 
         startIcon={<DashboardIcon />}
-        sx={{ fontWeight: 600 }}
+        aria-label="Dashboard"
+        sx={{
+          fontWeight: 600,
+          minWidth: { xs: 40, sm: 64 },
+          px: { xs: 1, sm: 2.5 },
+          '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
+        }}
       >
-        Dashboard
+        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Dashboard</Box>
       </Button>
     );
   };
@@ -304,9 +311,16 @@ function AppContent({ themeMode, toggleTheme }) {
       <Button 
         component={Link} 
         to="/" 
-        sx={{ fontWeight: 600 }}
+        startIcon={<CalendarMonthIcon />}
+        aria-label="Request a session"
+        sx={{
+          fontWeight: 600,
+          minWidth: { xs: 40, sm: 64 },
+          px: { xs: 1, sm: 2.5 },
+          '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
+        }}
       >
-        Book Counselor
+        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Request Session</Box>
       </Button>
     );
   };
@@ -314,7 +328,7 @@ function AppContent({ themeMode, toggleTheme }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="sticky" elevation={0}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Toolbar sx={{ justifyContent: 'space-between', gap: 1, px: { xs: 1.5, sm: 3 } }}>
           {/* Logo Brand */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'inherit' }} component={Link} to="/">
             <SpaIcon color="primary" sx={{ fontSize: 32 }} />
@@ -324,7 +338,7 @@ function AppContent({ themeMode, toggleTheme }) {
           </Box>
 
           {/* Navigation Links */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 2 } }}>
             {renderDashboardLink()}
             {renderBookSessionLink()}
 
@@ -442,9 +456,9 @@ function AppContent({ themeMode, toggleTheme }) {
           <Route 
             path="/" 
             element={
-              <LandingPage
-                // onAuthRedirect={handleOpenAuth} 
-                // currentUser={currentUser} 
+              <SessionRequest 
+                onAuthRedirect={handleOpenAuth} 
+                currentUser={currentUser} 
               />
             } 
           />
@@ -456,7 +470,7 @@ function AppContent({ themeMode, toggleTheme }) {
                 {currentUser?.role === 'counselor' ? (
                   <CounselorDashboard currentUser={currentUser} />
                 ) : (
-                  <PatientDashboard currentUser={currentUser} />
+                  <PatientDashboard currentUser={currentUser} onUserUpdated={setCurrentUser} />
                 )}
               </ProtectedRoute>
             } 

@@ -144,6 +144,13 @@ export const api = {
     });
   },
 
+  requestAppointment: async (requestData) => {
+    return request('/appointments', {
+      method: 'POST',
+      body: JSON.stringify(requestData),
+    });
+  },
+
   updateAppointment: async (id, updateData) => {
     return request(`/appointments/${id}`, {
       method: 'PUT',

@@ -4,7 +4,7 @@ import {
   Box, Container, Typography, Grid, Card, CardContent, Button, Tabs, Tab,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Rating, TextField,
-  Chip, CircularProgress, Alert, Divider, Avatar
+  Chip, CircularProgress, Alert, Divider, Avatar, Step, StepLabel, Stepper
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -12,9 +12,66 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import VideoCallIcon from '@mui/icons-material/VideoCall';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import StarIcon from '@mui/icons-material/Star';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
 import { api } from '../api';
 
-export default function PatientDashboard({ currentUser }) {
+const getAppointmentDateParts = (dateValue) => {
+  const parsedDate = dateValue ? new Date(dateValue) : null;
+  if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+    return { month: 'SESSION', day: '--', weekday: dateValue || 'Date to be confirmed' };
+  }
+
+  return {
+    month: parsedDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+    day: parsedDate.toLocaleDateString('en-US', { day: '2-digit' }),
+    weekday: parsedDate.toLocaleDateString('en-US', { weekday: 'long' }),
+  };
+};
+
+const createDemoAppointments = () => {
+  const dateInDays = (daysFromNow) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  return [
+    {
+      id: 'demo-session-next',
+      status: 'upcoming',
+      counselorName: 'Dr. Ananya Sen',
+      counselorSpecialty: 'CBT Specialist',
+      date: dateInDays(3),
+      time: '4:00 PM',
+      duration: 50,
+      appointmentType: 'Online Consultation',
+      isDemo: true,
+    },
+    {
+      id: 'demo-session-following',
+      status: 'upcoming',
+      counselorName: 'Dr. Sameer Joshi',
+      counselorSpecialty: 'Clinical Psychologist',
+      date: dateInDays(8),
+      time: '11:00 AM',
+      duration: 50,
+      appointmentType: 'In-Person Consultation',
+      clinicAddress: 'MindEase Wellness Center, Pune',
+      isDemo: true,
+    },
+    {
+      id: 'demo-request-pending',
+      status: 'requested',
+      date: dateInDays(10),
+      time: '2:30 PM',
+      appointmentType: 'Online Consultation',
+      isDemo: true,
+    },
+  ];
+};
+
+export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -35,6 +92,8 @@ export default function PatientDashboard({ currentUser }) {
   // Receipt Modal State
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({});
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -42,7 +101,10 @@ export default function PatientDashboard({ currentUser }) {
       setError('');
       
       const apts = await api.getAppointments();
-      setAppointments(apts);
+      const displayedAppointments = import.meta.env.DEV && apts.length === 0
+        ? createDemoAppointments()
+        : apts;
+      setAppointments(displayedAppointments);
 
       // In a real database, transactions would be filtered for this patient.
       // Since transactions endpoints exist, we can use it or filter.
@@ -129,10 +191,58 @@ export default function PatientDashboard({ currentUser }) {
     navigate(`/session/${aptId}`);
   };
 
+  const handleOpenProfile = () => {
+    setProfileDraft({
+      name: currentUser.name || '',
+      email: currentUser.email || '',
+      mobile: currentUser.mobile || '',
+      dob: currentUser.dob || '',
+      gender: currentUser.gender || '',
+      city: currentUser.city || '',
+      state: currentUser.state || '',
+      preferredLanguage: currentUser.preferredLanguage || '',
+      preferredCounselingMode: currentUser.preferredCounselingMode || '',
+      counselingRequirements: currentUser.counselingRequirements || '',
+    });
+    setProfileOpen(true);
+  };
+
+  const handleProfileSave = () => {
+    const updatedUser = { ...currentUser, ...profileDraft };
+    api.setCurrentUser(updatedUser);
+    onUserUpdated?.(updatedUser);
+    setProfileOpen(false);
+  };
+
   // Calculated metrics
+  const requestedApts = appointments.filter(a => a.status === 'requested' || a.status === 'pending');
   const upcomingApts = appointments.filter(a => a.status === 'upcoming');
   const pastApts = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
-  const totalSpent = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const profileGroups = [
+    {
+      title: 'About you',
+      fields: [
+        ['Date of birth', currentUser.dob],
+        ['Gender', currentUser.gender],
+        ['Location', [currentUser.city, currentUser.state].filter(Boolean).join(', ')],
+      ],
+    },
+    {
+      title: 'Contact details',
+      fields: [
+        ['Email address', currentUser.email],
+        ['Mobile number', currentUser.mobile],
+      ],
+    },
+    
+    {
+      title: 'Preferences',
+      fields: [
+        ['Preferred language', currentUser.preferredLanguage],
+        ['Counseling mode', currentUser.preferredCounselingMode],
+      ],
+    },
+  ];
 
   if (loading) {
     return (
@@ -143,260 +253,374 @@ export default function PatientDashboard({ currentUser }) {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 6 }}>
-      {/* Dashboard Welcome Header */}
-      <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <Avatar src={currentUser.avatar} sx={{ width: 80, height: 80, border: '3px solid #6366f1' }} />
-          <Box>
-            <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800 }}>
-              Welcome back, {currentUser.name}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Manage your booked therapy schedules, billing invoices, and active sessions.
-            </Typography>
-          </Box>
-        </Box>
-        <Button 
-          variant="contained" 
-          color="primary"
-          onClick={() => navigate('/')}
-          startIcon={<CalendarMonthIcon />}
-          sx={{ fontWeight: 600, px: 3, py: 1.2, borderRadius: 3 }}
-        >
-          Book New Session
-        </Button>
-      </Box>
-
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
-      {/* Metrics Cards */}
-      <Grid container spacing={3} sx={{ mb: 5 }}>
-        <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'primary.dark', color: '#ffffff' }}>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <CalendarMonthIcon sx={{ fontSize: 32 }} />
-              </Box>
-              <Box>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>Upcoming Sessions</Typography>
-                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
-                  {upcomingApts.length}
+      <Card sx={{ mb: 3, borderRadius: 3, overflow: 'hidden' }}>
+        <Grid container>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <Box sx={{
+              height: '100%',
+              minHeight: '100%',
+              p: { xs: 2.5, md: 3 },
+              display: 'grid',
+              gridTemplateColumns: { xs: '60px minmax(0, 1fr)', md: 'minmax(0, 1fr)' },
+              gridTemplateRows: { xs: 'auto auto', md: 'auto minmax(16px, 1fr) auto' },
+              alignItems: { xs: 'center', md: 'flex-start' },
+              columnGap: 2,
+              rowGap: { xs: 2, md: 0 },
+              bgcolor: 'primary.dark',
+              color: '#ffffff',
+            }}>
+              <Avatar src={currentUser.avatar} sx={{ width: 60, height: 60, border: '3px solid rgba(255,255,255,0.65)', gridColumn: 1, gridRow: 1, mb: { md: 2 } }} />
+              <Box sx={{ minWidth: 0, gridColumn: { xs: 2, md: 1 }, gridRow: { xs: 1, md: 2 } }}>
+                <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 700, lineHeight: 1.5 }}>
+                  YOUR PROFILE
+                </Typography>
+                <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 700, overflowWrap: 'anywhere' }}>
+                  {currentUser.name}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.78)', mt: 0.75 }}>
+                  Your personal details and counseling preferences.
                 </Typography>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'success.main', color: '#ffffff' }}>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <CheckCircleIcon sx={{ fontSize: 32 }} />
-              </Box>
-              <Box>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>Completed Sessions</Typography>
-                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
-                  {appointments.filter(a => a.status === 'completed').length}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'rgba(99, 102, 241, 0.1)', color: 'primary.main', borderRadius: 3 }}>
-                <ReceiptLongIcon sx={{ fontSize: 32 }} />
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Total NGO Sessions</Typography>
-                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 700, color: 'text.primary' }}>
-                  {appointments.length}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Tabs Menu Navigation */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
-        <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)}>
-          <Tab label="Appointments" sx={{ fontWeight: 600, fontSize: '1rem' }} />
-          <Tab label="Booking Confirmations" sx={{ fontWeight: 600, fontSize: '1rem' }} />
-        </Tabs>
-      </Box>
-
-      {/* TAB 0: APPOINTMENTS PANEL */}
-      {activeTab === 0 && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {/* Upcoming sessions list */}
-          <Box>
-            <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
-              Upcoming Sessions
-            </Typography>
-            {upcomingApts.length === 0 ? (
-              <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 3 }}>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                  You have no sessions scheduled currently.
-                </Typography>
-                <Button variant="contained" href="#/">Find a Counselor</Button>
-              </Paper>
-            ) : (
-              <Grid container spacing={3}>
-                {upcomingApts.map((apt) => (
-                  <Grid item xs={12} md={6} key={apt.id}>
-                    <Card sx={{ borderLeft: '6px solid #6366f1' }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                          <Box>
-                            <Typography variant="h6" sx={{ fontWeight: 700 }}>{apt.counselorName}</Typography>
-                            <Typography variant="body2" color="primary">{apt.counselorSpecialty}</Typography>
+              <Button
+                variant="outlined"
+                startIcon={<EditOutlinedIcon />}
+                onClick={handleOpenProfile}
+                sx={{
+                  mt: { md: 'auto' },
+                  gridColumn: { xs: '1 / -1', md: 1 },
+                  gridRow: { xs: 2, md: 3 },
+                  justifySelf: 'start',
+                  color: '#ffffff',
+                  borderColor: 'rgba(255,255,255,0.55)',
+                  '&:hover': { borderColor: '#ffffff', bgcolor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                Edit profile
+              </Button>
+            </Box>
+          </Grid>
+          <Grid size={{ xs: 12, md: 9 }}>
+            <Box sx={{ p: { xs: 2.5, md: 3.5 } }}>
+              <Grid container sx={{ height: '100%' }}>
+                {profileGroups.map((group, index) => (
+                  <Grid size={{ xs: 12, md: 4 }} key={group.title}>
+                    <Box sx={{
+                      height: '100%',
+                      pt: { xs: index === 0 ? 0 : 2.5, md: 0 },
+                      mt: { xs: index === 0 ? 0 : 2.5, md: 0 },
+                      pl: { md: index === 0 ? 0 : 2.5 },
+                      borderTop: { xs: index === 0 ? 0 : 1, md: 0 },
+                      borderLeft: { md: index === 0 ? 0 : 1 },
+                      borderColor: 'divider',
+                    }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>{group.title}</Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {group.fields.map(([label, value]) => (
+                          <Box key={label}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.35 }}>{label}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{value || 'Not provided'}</Typography>
                           </Box>
-                          <Chip label="Upcoming" color="primary" size="small" />
-                        </Box>
-                        
-                        <Divider sx={{ my: 1.5 }} />
-
-                        <Grid container spacing={2} sx={{ mb: 2 }}>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">DATE</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.date}</Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">TIME</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.time} (60m)</Typography>
-                          </Grid>
-                        </Grid>
-
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
-                          {apt.appointmentType === 'In-Person Consultation' ? (
-                            <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2, border: '1px solid', borderColor: 'divider', width: '100%' }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.5px' }}>
-                                OFFLINE / IN-PERSON MEETING
-                              </Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mt: 0.5 }}>
-                                Address: {apt.clinicAddress || '102 Medical Wellness Center, Suite 300, California'}
-                              </Typography>
-                            </Box>
-                          ) : (
-                            <Button 
-                              variant="contained" 
-                              fullWidth 
-                              startIcon={<VideoCallIcon />}
-                              onClick={() => handleJoinSession(apt.id)}
-                              sx={{
-                                bgcolor: 'success.main',
-                                '&:hover': { bgcolor: 'success.dark' }
-                              }}
-                            >
-                              Join Session
-                            </Button>
-                          )}
-                        </Box>
-                      </CardContent>
-                    </Card>
+                        ))}
+                        {group.title === 'Preferences' && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.35 }}>Counseling requirements</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                              {currentUser.counselingRequirements || 'Not provided'}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
                   </Grid>
                 ))}
               </Grid>
-            )}
-          </Box>
+            </Box>
+          </Grid>
+        </Grid>
+      </Card>
 
-          {/* Past sessions list */}
-          <Box>
-            <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
-              Session History
-            </Typography>
-            {pastApts.length === 0 ? (
-              <Typography variant="body1" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                No past sessions recorded.
-              </Typography>
-            ) : (
-              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Counselor</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Date & Time</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Feedback</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {pastApts.map((apt) => (
-                      <TableRow key={apt.id}>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.counselorName}</Typography>
-                          <Typography variant="caption" color="text.secondary">{apt.counselorSpecialty}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{apt.date}</Typography>
-                          <Typography variant="caption" color="text.secondary">{apt.time}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={apt.status} 
-                            color={apt.status === 'completed' ? 'success' : 'error'} 
-                            variant="outlined" 
-                            size="small" 
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {apt.status === 'completed' ? (
-                            apt.review ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                                <StarIcon sx={{ color: 'warning.main', fontSize: 18 }} />
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                  {apt.review.rating}/5
-                                </Typography>
+      
+      
+      {/* Dashboard Sections */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2.5 }}>
+        <Tabs value={activeTab} onChange={(event, value) => setActiveTab(value)} variant="scrollable" allowScrollButtonsMobile>
+          <Tab label={`Upcoming & active ${requestedApts.length + upcomingApts.length}`} sx={{ fontWeight: 600 }} />
+          <Tab label={`Past journey ${pastApts.length}`} sx={{ fontWeight: 600 }} />
+          <Tab label="Care plan & notes" sx={{ fontWeight: 600 }} />
+          <Tab label="Confirmations" sx={{ fontWeight: 600 }} />
+        </Tabs>
+      </Box>
+
+      {activeTab === 0 && (
+        <Grid container spacing={2.5} sx={{ alignItems: 'flex-start' }}>
+          <Grid size={{ xs: 12 }}>
+            <Box id="upcoming-session" sx={{ scrollMarginTop: 96, mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>Next confirmed session</Typography>
+                  <Typography variant="body2" color="text.secondary">Your assigned counselor and session details</Typography>
+                </Box>
+                <Chip label={`${upcomingApts.length} scheduled`} size="small" color={upcomingApts.length ? 'success' : 'default'} />
+              </Box>
+              {upcomingApts.length === 0 ? (
+                <Paper sx={{ p: { xs: 2.5, md: 3 }, display: 'flex', alignItems: 'center', gap: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                  <Box sx={{ width: 54, height: 54, flex: '0 0 auto', display: 'grid', placeItems: 'center', borderRadius: 2, bgcolor: 'primary.light', color: 'primary.dark' }}>
+                    <CalendarMonthIcon />
+                  </Box>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>No confirmed sessions yet</Typography>
+                    <Typography variant="body2" color="text.secondary">Your next session will appear here with its time and joining details.</Typography>
+                  </Box>
+                    <Button size="small" variant="outlined" onClick={() => navigate('/')}>Request a session</Button>
+                </Paper>
+              ) : (
+                <Grid container spacing={2}>
+                  {upcomingApts.map((apt, index) => {
+                    const sessionDate = getAppointmentDateParts(apt.date);
+                    return (
+                      <Grid size={{ xs: 12, lg: 6 }} key={apt.id}>
+                      <Card sx={{ height: '100%', border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                        <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                            <Box sx={{
+                              width: 76,
+                              minHeight: 82,
+                              flex: '0 0 auto',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: 2,
+                              bgcolor: index === 0 ? 'primary.light' : 'action.hover',
+                              color: index === 0 ? 'primary.dark' : 'text.primary',
+                              px: 1,
+                            }}>
+                              <Typography variant="overline" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{sessionDate.month}</Typography>
+                              <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.15 }}>{sessionDate.day}</Typography>
+                              <Typography variant="caption" sx={{ textAlign: 'center' }}>{sessionDate.weekday}</Typography>
+                            </Box>
+
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
+                                <Chip label={index === 0 ? 'Next session' : 'Confirmed'} size="small" color={index === 0 ? 'success' : 'primary'} />
+                                <Chip label="Assigned by care team" size="small" variant="outlined" />
+                                {apt.appointmentType && <Chip label={apt.appointmentType.replace(' Consultation', '')} size="small" variant="outlined" />}
+                                {apt.isDemo && <Chip label="Sample" size="small" variant="outlined" />}
                               </Box>
-                            ) : (
-                              <Button 
-                                variant="outlined" 
-                                size="small" 
-                                startIcon={<RateReviewIcon />}
-                                onClick={() => handleOpenReview(apt)}
-                              >
-                                Write Review
-                              </Button>
-                            )
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">—</Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+                                <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.light', color: 'primary.dark' }}>
+                                  {apt.counselorName?.charAt(0) || <SelfImprovementIcon />}
+                                </Avatar>
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.3 }}>{apt.counselorName}</Typography>
+                                  <Typography variant="body2" color="text.secondary" noWrap>{apt.counselorSpecialty || 'Counselor'}</Typography>
+                                </Box>
+                              </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600, mt: 1 }}>
+                                {apt.time || 'Time to be confirmed'}{apt.duration ? ` · ${apt.duration} min` : ''}
+                              </Typography>
+                            </Box>
+
+                            <Box sx={{ width: { xs: '100%', sm: 190 }, flex: '0 0 auto' }}>
+                              {apt.isDemo ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: { xs: 'left', sm: 'center' } }}>
+                                  Sample appointment · no live link
+                                </Typography>
+                              ) : apt.appointmentType === 'In-Person Consultation' ? (
+                                <Box>
+                                  <Typography variant="caption" color="text.secondary">MEETING LOCATION</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.clinicAddress || 'Address shared after confirmation'}</Typography>
+                                </Box>
+                              ) : (
+                                <Button variant="contained" fullWidth startIcon={<VideoCallIcon />} onClick={() => handleJoinSession(apt.id)}>
+                                  Enter video room
+                                </Button>
+                              )}
+                            </Box>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              )}
+            </Box>
+
+            <Box id="pending-requests" sx={{ scrollMarginTop: 96 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CalendarMonthIcon fontSize="small" color="warning" />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Pending session requests</Typography>
+                </Box>
+                <Chip label={`${requestedApts.length} waiting`} size="small" color={requestedApts.length ? 'warning' : 'default'} />
+              </Box>
+              {requestedApts.length === 0 ? (
+                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'divider' }}>
+                  <CheckCircleIcon color="success" />
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>No requests waiting for review</Typography>
+                    <Typography variant="body2" color="text.secondary">When you request a session, the care team will review it and assign a counselor.</Typography>
+                  </Box>
+                </Paper>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {requestedApts.map((apt) => {
+                    const requestDate = getAppointmentDateParts(apt.date);
+                    return (
+                      <Paper key={apt.id} sx={{ p: { xs: 2, sm: 2.5 }, border: 1, borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: 'warning.main', borderRadius: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                            <Box sx={{
+                              width: 48,
+                              height: 52,
+                              flex: '0 0 auto',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: 1.5,
+                              bgcolor: 'warning.light',
+                              color: 'warning.dark',
+                            }}>
+                              <Typography variant="overline" sx={{ fontWeight: 700, lineHeight: 1 }}>{requestDate.month}</Typography>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.25 }}>{requestDate.day}</Typography>
+                            </Box>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>{apt.counselorName ? `Assigned: ${apt.counselorName}` : 'Counselor assigned after review'}</Typography>
+                              <Typography variant="body2" color="text.secondary" noWrap>
+                                {apt.counselorSpecialty || 'Your care team is reviewing your request'}{apt.appointmentType ? ` · ${apt.appointmentType}` : ''}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">{requestDate.weekday} · {apt.time || 'Time requested'}</Typography>
+                            </Box>
+                          </Box>
+                          <Chip label="Admin review" size="small" color="warning" />
+                        </Box>
+                        <Stepper
+                          activeStep={1}
+                          alternativeLabel
+                          sx={{
+                            pt: 2.5,
+                            '& .MuiStepLabel-label': { fontSize: '0.7rem', mt: 0.5 },
+                            '& .MuiStepIcon-root.Mui-active': { color: 'warning.main' },
+                            '& .MuiStepIcon-root.Mui-completed': { color: 'success.main' },
+                          }}
+                        >
+                          {['Request submitted', 'Admin review', 'Counselor assigned'].map((label) => (
+                            <Step key={label}><StepLabel>{label}</StepLabel></Step>
+                          ))}
+                        </Stepper>
+                      </Paper>
+                    );
+                  })}
+                </Box>
+              )}
+            </Box>
+          </Grid>
+
+          
+        </Grid>
+      )}
+
+      {activeTab === 1 && (
+        <Box id="past-journey" sx={{ scrollMarginTop: 96 }}>
+          <Box sx={{ mb: 2.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Recent session history</Typography>
+            <Typography variant="body2" color="text.secondary">Your completed and cancelled sessions</Typography>
           </Box>
+          {pastApts.length === 0 ? (
+            <Paper sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2, border: 1, borderColor: 'divider' }}>
+              <ReceiptLongIcon color="primary" />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Your journey starts here</Typography>
+                <Typography variant="body2" color="text.secondary">Completed sessions and reflections will appear here.</Typography>
+              </Box>
+            </Paper>
+          ) : (
+            <Grid container spacing={2}>
+              {pastApts.map((apt) => (
+                <Grid size={{ xs: 12, md: 6 }} key={apt.id}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{apt.counselorName}</Typography>
+                          <Typography variant="body2" color="text.secondary">{apt.counselorSpecialty}</Typography>
+                        </Box>
+                        <Chip label={apt.status} color={apt.status === 'completed' ? 'success' : 'error'} variant="outlined" size="small" />
+                      </Box>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.date} · {apt.time}</Typography>
+                        {apt.status === 'completed' && (apt.review ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <StarIcon sx={{ color: 'warning.main', fontSize: 18 }} />
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>{apt.review.rating}/5</Typography>
+                          </Box>
+                        ) : (
+                          <Button variant="outlined" size="small" startIcon={<RateReviewIcon />} onClick={() => handleOpenReview(apt)}>Write review</Button>
+                        ))}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
         </Box>
       )}
 
-      {/* TAB 1: BILLING & TRANSACTION LOGS */}
-      {activeTab === 1 && (
-        <Box>
-          <Typography variant="h5" sx={{ mb: 3, fontFamily: 'Outfit', fontWeight: 700 }}>
-            Booking Confirmation Ledger
-          </Typography>
+      {activeTab === 2 && (
+        <Grid container spacing={2.5}>
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <SelfImprovementIcon color="primary" />
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>Your current focus</Typography>
+                </Box>
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', mb: 2.5 }}>
+                  {currentUser.counselingRequirements || 'Add a focus or goal to help your counselor prepare for your sessions.'}
+                </Typography>
+                <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={handleOpenProfile}>Update care preferences</Button>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Your preferences</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box><Typography variant="caption" color="text.secondary">SESSION FORMAT</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{currentUser.preferredCounselingMode || 'Not selected'}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">PREFERRED LANGUAGE</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{currentUser.preferredLanguage || 'Not selected'}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">SESSIONS COMPLETED</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{appointments.filter((apt) => apt.status === 'completed').length}</Typography></Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {activeTab === 3 && (
+        <Box id="booking-confirmations" sx={{ scrollMarginTop: 96 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Booking confirmations</Typography>
           {transactions.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
-              <Typography variant="body1" color="text.secondary">
-                No bookings found.
-              </Typography>
+            <Paper sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2, border: 1, borderColor: 'divider' }}>
+              <ReceiptLongIcon color="primary" />
+              <Typography variant="body2" color="text.secondary">Your booking confirmations will appear here.</Typography>
             </Paper>
           ) : (
             <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Booking Reference</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Booking reference</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Counselor</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Booking Date</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Verification Details</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Booking date</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Verification details</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Action</TableCell>
                   </TableRow>
@@ -404,18 +628,12 @@ export default function PatientDashboard({ currentUser }) {
                 <TableBody>
                   {transactions.map((tx) => (
                     <TableRow key={tx.id}>
-                      <TableCell sx={{ fontWeight: 'mono', fontSize: '0.85rem' }}>{tx.id}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{tx.id}</TableCell>
                       <TableCell>{tx.counselorName}</TableCell>
                       <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
                       <TableCell>{tx.paymentMethod}</TableCell>
-                      <TableCell>
-                        <Chip label={tx.status} color="success" size="small" variant="filled" />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button variant="text" size="small" onClick={() => handleOpenReceipt(tx)}>
-                          View Confirmation
-                        </Button>
-                      </TableCell>
+                      <TableCell><Chip label={tx.status} color="success" size="small" /></TableCell>
+                      <TableCell align="right"><Button variant="text" size="small" onClick={() => handleOpenReceipt(tx)}>View confirmation</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -465,6 +683,50 @@ export default function PatientDashboard({ currentUser }) {
           >
             {reviewLoading ? <CircularProgress size={24} /> : 'Submit Review'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Edit profile details</DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2} sx={{ pt: 1 }}>
+            {[
+              ['name', 'Full name'],
+              ['email', 'Email address'],
+              ['mobile', 'Mobile number'],
+              ['dob', 'Date of birth'],
+              ['gender', 'Gender'],
+              ['city', 'City'],
+              ['state', 'State'],
+              ['preferredLanguage', 'Preferred language'],
+              ['preferredCounselingMode', 'Preferred counseling mode'],
+            ].map(([field, label]) => (
+              <Grid size={{ xs: 12, sm: 6 }} key={field}>
+                <TextField
+                  fullWidth
+                  label={label}
+                  type={field === 'dob' ? 'date' : 'text'}
+                  value={profileDraft[field] || ''}
+                  onChange={(event) => setProfileDraft(prev => ({ ...prev, [field]: event.target.value }))}
+                  slotProps={field === 'dob' ? { inputLabel: { shrink: true } } : undefined}
+                />
+              </Grid>
+            ))}
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                multiline
+                minRows={3}
+                label="Counseling requirements"
+                value={profileDraft.counselingRequirements || ''}
+                onChange={(event) => setProfileDraft(prev => ({ ...prev, counselingRequirements: event.target.value }))}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setProfileOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleProfileSave}>Save profile</Button>
         </DialogActions>
       </Dialog>
 
