@@ -3,6 +3,8 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 let authToken = localStorage.getItem('token') || null;
 let refreshToken = localStorage.getItem('refreshToken') || null;
 
+let isRefreshing = false;
+
 const request = async (endpoint, options = {}) => {
   const url = `${BASE_URL}${endpoint}`;
   
@@ -17,9 +19,39 @@ const request = async (endpoint, options = {}) => {
     headers,
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401 && refreshToken && !isRefreshing && endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
+    try {
+      isRefreshing = true;
+      const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        api.setToken(refreshData.token || refreshData.accessToken);
+        if (refreshData.refreshToken) {
+          api.setRefreshToken(refreshData.refreshToken);
+        }
+        isRefreshing = false;
+        // Retry the original request with new token
+        return request(endpoint, options);
+      }
+    } catch (e) {
+      console.error('Auto token refresh failed:', e);
+    } finally {
+      isRefreshing = false;
+    }
+  }
 
   if (!response.ok) {
+    if (response.status === 401 && (data.message === 'Invalid token' || data.message === 'Invalid token.' || data.message === 'Token expired')) {
+      // Clear invalid stale token
+      api.logout();
+      window.dispatchEvent(new CustomEvent('auth-invalid-token'));
+    }
     throw new Error(data.message || 'Something went wrong');
   }
 

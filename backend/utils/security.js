@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
-const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const OTP_BCRYPT_COST = Number(process.env.OTP_BCRYPT_COST || 10);
 
 const getJwtSecret = () => process.env.JWT_SECRET || 'mindease-dev-jwt-secret-change-me';

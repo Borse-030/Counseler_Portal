@@ -16,6 +16,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import { api } from '../api';
 
 const HOURS = Array.from({ length: 15 }, (_, i) => {
@@ -134,8 +135,8 @@ export default function CounselorDashboard({ currentUser }) {
           return {
             dayIndex: day.value,
             active: isWorking,
-            slots: isWorking 
-              ? [{ startHour: avail.startHour || '09:00', endHour: avail.endHour || '17:00' }] 
+            slots: isWorking
+              ? [{ startHour: avail.startHour || '09:00', endHour: avail.endHour || '17:00' }]
               : [{ startHour: '09:00', endHour: '17:00' }]
           };
         }
@@ -560,33 +561,110 @@ export default function CounselorDashboard({ currentUser }) {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 6 }}>
-      {/* Welcome Header */}
-      <Box sx={{ mb: 5, display: 'flex', alignItems: 'center', gap: 3 }}>
-        <Avatar src={currentUser.avatar} sx={{ width: 80, height: 80, border: '3px solid #6366f1' }} />
-        <Box>
-          <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800 }}>
-            Counselor Dashboard: {currentUser.name}
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Set availability hours, check clinic appointments, and review clinical intake summaries.
-          </Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 } }}>
+      {/* Sleek Header Banner */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, sm: 2.5 },
+          mb: 2.5,
+          borderRadius: 3.5,
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(168,85,247,0.04) 50%, rgba(255,255,255,0.8) 100%)',
+          border: '1px solid',
+          borderColor: 'rgba(99,102,241,0.15)',
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+          gap: 2
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ position: 'relative' }}>
+            <Avatar
+              src={currentUser.avatar}
+              sx={{
+                width: { xs: 54, sm: 64 },
+                height: { xs: 54, sm: 64 },
+                border: '2.5px solid #6366f1',
+                boxShadow: '0 4px 14px rgba(99,102,241,0.25)'
+              }}
+            />
+            <Box sx={{
+              position: 'absolute',
+              bottom: 2,
+              right: 2,
+              width: 13,
+              height: 13,
+              bgcolor: '#10b981',
+              border: '2px solid #ffffff',
+              borderRadius: '50%'
+            }} />
+          </Box>
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '-0.3px' }}>
+                {currentUser.name}
+              </Typography>
+              <Chip
+                size="small"
+                label="Counselor"
+                icon={<PsychologyIcon sx={{ fontSize: '14px !important' }} />}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  bgcolor: 'rgba(99,102,241,0.12)',
+                  color: '#4f46e5',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  height: 24
+                }}
+              />
+              {currentUser.specialty && (
+                <Chip
+                  size="small"
+                  label={currentUser.specialty}
+                  variant="outlined"
+                  sx={{ fontSize: '0.72rem', fontWeight: 600, height: 24 }}
+                />
+              )}
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+              Set availability hours, manage patient consultations, and review clinical intake cases.
+            </Typography>
+          </Box>
         </Box>
-      </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
+        <Box sx={{ display: 'flex', gap: 1, alignSelf: { xs: 'flex-end', sm: 'center' } }}>
+          <Chip
+            size="small"
+            label={new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            icon={<DateRangeIcon sx={{ fontSize: '14px !important' }} />}
+            sx={{ fontWeight: 600, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}
+          />
+        </Box>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }}>{error}</Alert>}
 
       {/* Metrics Section */}
-      <Grid container spacing={3} sx={{ mb: 5 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'primary.dark', color: '#ffffff' }}>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <PointOfSaleIcon sx={{ fontSize: 32 }} />
+          <Card sx={{
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #312e81 0%, #1e1b4b 100%)',
+            color: '#ffffff',
+            boxShadow: '0 4px 18px rgba(49,46,129,0.25)',
+            border: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.25, bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2.5, display: 'flex' }}>
+                <PointOfSaleIcon sx={{ fontSize: 26 }} />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>Completed Sessions</Typography>
-                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
+                <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                  Completed Sessions
+                </Typography>
+                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.1 }}>
                   {appointments.filter(a => a.status === 'completed').length}
                 </Typography>
               </Box>
@@ -595,14 +673,22 @@ export default function CounselorDashboard({ currentUser }) {
         </Grid>
 
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'success.main', color: '#ffffff' }}>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <DateRangeIcon sx={{ fontSize: 32 }} />
+          <Card sx={{
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #059669 0%, #064e3b 100%)',
+            color: '#ffffff',
+            boxShadow: '0 4px 18px rgba(5,150,105,0.25)',
+            border: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.25, bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2.5, display: 'flex' }}>
+                <DateRangeIcon sx={{ fontSize: 26 }} />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>Scheduled Patients</Typography>
-                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
+                <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                  Scheduled Patients
+                </Typography>
+                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.1 }}>
                   {upcomingSessions.length}
                 </Typography>
               </Box>
@@ -610,14 +696,48 @@ export default function CounselorDashboard({ currentUser }) {
           </Card>
         </Grid>
 
-
+        <Grid item xs={12} sm={4}>
+          <Card sx={{
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #d97706 0%, #78350f 100%)',
+            color: '#ffffff',
+            boxShadow: '0 4px 18px rgba(217,119,6,0.25)',
+            border: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.25, bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2.5, display: 'flex' }}>
+                <AssignmentIcon sx={{ fontSize: 26 }} />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                  Intake Requests
+                </Typography>
+                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.1 }}>
+                  {pendingReviewRequests.length}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       {/* Tabs Layout */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
-        <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)}>
-          <Tab label="Patient Workspace" sx={{ fontWeight: 600, fontSize: '1rem' }} />
-          <Tab label="Set Availability" sx={{ fontWeight: 600, fontSize: '1rem' }} />
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(e, val) => setActiveTab(val)}
+          sx={{
+            '& .MuiTab-root': {
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              textTransform: 'none',
+              minHeight: 44,
+              px: 2.5
+            }
+          }}
+        >
+          <Tab label="Patient Workspace" />
+          <Tab label="Set Availability" />
         </Tabs>
       </Box>
 
@@ -655,279 +775,279 @@ export default function CounselorDashboard({ currentUser }) {
           </Grid>
 
           <Grid size={{ xs: 12, md: 9 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Box id="care-requests" sx={{ scrollMarginTop: 96 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <Box id="care-requests" sx={{ scrollMarginTop: 96 }}>
-                <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Assigned care requests</Typography>
-                <Typography variant="body2" color="text.secondary">Review patient intake, respond, then schedule discovery and follow-up sessions.</Typography>
-              </Box>
-              <Chip label={`${pendingReviewRequests.length} to review`} size="small" color={pendingReviewRequests.length ? 'warning' : 'default'} />
-            </Box>
-            <Tabs value={requestTab} onChange={(event, value) => setRequestTab(value)} sx={{ mb: 2 }}>
-              <Tab label={`Pending review ${pendingReviewRequests.length}`} />
-              <Tab label={`Approved patients ${approvedRequests.length}`} />
-              <Tab label={`Declined ${declinedRequests.length}`} />
-            </Tabs>
-            {visibleCareRequests.length === 0 ? (
-              <Paper sx={{ p: 2.5, border: 1, borderColor: 'divider' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                  {requestTab === 0 ? 'No requests waiting for your review' : requestTab === 1 ? 'No approved patients yet' : 'No declined requests'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {requestTab === 0 ? 'The admin team will assign patients based on expertise and availability.' : 'Requests will appear here as you review assigned patients.'}
-                </Typography>
-              </Paper>
-            ) : (
-              <Grid container spacing={2}>
-                {visibleCareRequests.map((careRequest) => {
-                  const relatedAppointments = appointments.filter((appointment) => appointment.careRequestId === careRequest.id);
-                  return (
-                    <Grid size={{ xs: 12, lg: 6 }} key={careRequest.id}>
-                      <Card sx={{ height: '100%' }}>
-                        <CardContent>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
-                            <Box id="upcoming-sessions" sx={{ scrollMarginTop: 96 }}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{careRequest.patientName}</Typography>
-                              <Typography variant="caption" color="text.secondary">Request {careRequest.id}</Typography>
-                            </Box>
-                            <Chip label={careRequest.status.replaceAll('_', ' ')} size="small" color={careRequest.status === 'rejected' ? 'error' : 'warning'} />
-                          </Box>
-                          <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
-                            <Grid size={{ xs: 6 }}>
-                              <Typography variant="caption" color="text.secondary">PREFERRED DATE</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{careRequest.preferredDate}</Typography>
-                            </Grid>
-                            <Grid size={{ xs: 6 }}>
-                              <Typography variant="caption" color="text.secondary">TIME / FORMAT</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{careRequest.preferredTime} · {careRequest.preferredFormat}</Typography>
-                            </Grid>
-                          </Grid>
-                          <Typography variant="caption" color="text.secondary">PATIENT INTAKE</Typography>
-                          <Typography variant="body2" sx={{ minHeight: 40, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mb: 2 }}>
-                            {careRequest.intakeNotes || 'No additional intake notes.'}
-                          </Typography>
-
-                          {relatedAppointments.length > 0 && (
-                            <Box sx={{ mb: 2, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-                              <Typography variant="caption" color="text.secondary">LINKED APPOINTMENTS</Typography>
-                              {relatedAppointments.map((appointment) => (
-                                <Typography key={appointment.id} variant="body2">
-                                  {appointment.appointmentKind === 'discovery' ? 'Discovery call' : 'Session'} · {appointment.date} · {appointment.time} · {appointment.status}
-                                </Typography>
-                              ))}
-                            </Box>
-                          )}
-
-                          {careRequest.status === 'assigned' && careRequest.assignedCounselorId === currentUser.id && (
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                              <Button size="small" variant="contained" onClick={() => handleAcceptCareRequest(careRequest)}>Accept request</Button>
-                              <Button size="small" color="error" variant="outlined" onClick={() => { setDecisionRequest(careRequest); setDecisionReason(''); }}>Return to admin</Button>
-                            </Box>
-                          )}
-                          {careRequest.status === 'accepted' && careRequest.assignedCounselorId === currentUser.id && (
-                            <Button size="small" variant="contained" onClick={() => handleOpenRequestSchedule(careRequest, 'discovery')}>Schedule discovery call</Button>
-                          )}
-                          {['discovery_scheduled', 'discovery_completed'].includes(careRequest.status) && (
-                            <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                              <Typography variant="caption" color="text.secondary">DISCOVERY CALL NOTES</Typography>
-                              <TextField
-                                fullWidth
-                                multiline
-                                minRows={3}
-                                size="small"
-                                sx={{ mt: 0.75, mb: 1 }}
-                                placeholder="Record the patient's needs, goals, and recommended next steps."
-                                value={discoveryNotesDrafts[careRequest.id] ?? careRequest.discoveryNotes ?? ''}
-                                disabled={careRequest.assignedCounselorId !== currentUser.id}
-                                onChange={(event) => setDiscoveryNotesDrafts((previous) => ({ ...previous, [careRequest.id]: event.target.value }))}
-                              />
-                              {careRequest.assignedCounselorId === currentUser.id && (
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => handleSaveDiscoveryNotes(careRequest)}
-                                  disabled={discoveryNotesSaving === careRequest.id}
-                                >
-                                  {discoveryNotesSaving === careRequest.id ? <CircularProgress size={18} /> : 'Save discovery notes'}
-                                </Button>
-                              )}
-                            </Box>
-                          )}
-                          {careRequest.status === 'discovery_completed' && careRequest.assignedCounselorId === currentUser.id && (
-                            <Box sx={{ mt: 1.5 }}>
-                              {careRequest.finalCounselorId ? (
-                                <Chip label={`Ongoing care: ${careRequest.finalCounselorName}`} color="success" size="small" />
-                              ) : (
-                                <Button size="small" variant="contained" onClick={() => { setFinalAssignmentRequest(careRequest); setFinalCounselorId(currentUser.id); setFinalAssignmentReason(''); }}>
-                                  Assign ongoing counselor
-                                </Button>
-                              )}
-                            </Box>
-                          )}
-                          {['discovery_completed', 'active'].includes(careRequest.status) && careRequest.finalCounselorId === currentUser.id && (
-                            <Box sx={{ mt: 1.5 }}>
-                              {careRequest.finalCounselorId && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>Assigned for ongoing care</Typography>}
-                              <Button size="small" variant="contained" onClick={() => handleOpenRequestSchedule(careRequest, 'session')}>Schedule follow-up session</Button>
-                            </Box>
-                          )}
-                          {careRequest.status === 'rejected' && (
-                            <Alert severity="info" sx={{ mt: 1.5 }}>{careRequest.rejectedReason || 'Returned to admin for reassignment.'}</Alert>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            )}
-          </Box>
-
-          {/* Upcoming Appointments */}
-          <Box id="upcoming-sessions" sx={{ scrollMarginTop: 96 }}>
-            <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
-              Upcoming Sessions
-            </Typography>
-            {upcomingSessions.length === 0 ? (
-              <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
-                <Typography variant="body1" color="text.secondary">
-                  No upcoming appointments scheduled at this moment.
-                </Typography>
-              </Paper>
-            ) : (
-              <Grid container spacing={3}>
-                {upcomingSessions.map((apt) => (
-                  <Grid item xs={12} md={6} key={apt.id}>
-                    <Card sx={{ borderLeft: '6px solid #10b981' }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>{apt.patientName}</Typography>
-                          <Chip label="Upcoming" color="success" size="small" />
-                        </Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                          Schedule: <strong>{apt.date}</strong> at <strong>{apt.time}</strong> (60m)
-                        </Typography>
-
-                        <Typography variant="body2" sx={{
-                          mb: 2,
-                          p: 1.5,
-                          bgcolor: 'action.hover',
-                          borderRadius: 2,
-                          fontStyle: apt.intakeNotes ? 'normal' : 'italic'
-                        }}>
-                          <strong>Patient Intake notes:</strong> {apt.intakeNotes || 'None provided.'}
-                        </Typography>
-
-                        <Divider sx={{ my: 2 }} />
-
-                        <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column', width: '100%' }}>
-                          {apt.appointmentType === 'In-Person Consultation' ? (
-                            <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2, border: '1px solid', borderColor: 'divider', width: '100%', mb: 1 }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.5px' }}>
-                                OFFLINE / IN-PERSON MEETING
-                              </Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mt: 0.5 }}>
-                                Address: {apt.clinicAddress || '102 Medical Wellness Center, Suite 300, California'}
-                              </Typography>
-                            </Box>
-                          ) : (
-                            <Button
-                              variant="contained"
-                              size="small"
-                              startIcon={<VideoCallIcon />}
-                              onClick={() => navigate(`/session/${apt.id}`)}
-                              sx={{ mb: 1 }}
-                            >
-                              Join Room
-                            </Button>
-                          )}
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<AssignmentIcon />}
-                              onClick={() => handleOpenNotes(apt)}
-                              sx={{ flexGrow: 1 }}
-                            >
-                              Clinical Notes
-                            </Button>
-                            <Button
-                              variant="text"
-                              color="error"
-                              size="small"
-                              onClick={() => handleUpdateStatus(apt.id, 'cancelled')}
-                            >
-                              Cancel
-                            </Button>
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            )}
-          </Box>
-
-          {/* Past Appointments History */}
-          <Box id="past-consultations" sx={{ scrollMarginTop: 96 }}>
-            <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
-              Historical Consultations
-            </Typography>
-            {pastSessions.length === 0 ? (
-              <Typography variant="body1" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                No past consultations recorded.
-              </Typography>
-            ) : (
-              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Patient Name</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Consultation Date</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Notes & Reviews</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {pastSessions.map((apt) => (
-                      <TableRow key={apt.id}>
-                        <TableCell sx={{ fontWeight: 600 }}>{apt.patientName}</TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{apt.date}</Typography>
-                          <Typography variant="caption" color="text.secondary">{apt.time}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={apt.status}
-                            color={apt.status === 'completed' ? 'success' : 'error'}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
-                            <Button size="small" variant="text" onClick={() => handleOpenNotes(apt)}>
-                              View Clinical Note
-                            </Button>
-                            {apt.review && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <StarRateIcon sx={{ color: 'warning.main', fontSize: 16 }} />
-                                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                  Patient rated {apt.review.rating}/5
-                                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+                  <Box id="care-requests" sx={{ scrollMarginTop: 96 }}>
+                    <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Assigned care requests</Typography>
+                    <Typography variant="body2" color="text.secondary">Review patient intake, respond, then schedule discovery and follow-up sessions.</Typography>
+                  </Box>
+                  <Chip label={`${pendingReviewRequests.length} to review`} size="small" color={pendingReviewRequests.length ? 'warning' : 'default'} />
+                </Box>
+                <Tabs value={requestTab} onChange={(event, value) => setRequestTab(value)} sx={{ mb: 2 }}>
+                  <Tab label={`Pending review ${pendingReviewRequests.length}`} />
+                  <Tab label={`Approved patients ${approvedRequests.length}`} />
+                  <Tab label={`Declined ${declinedRequests.length}`} />
+                </Tabs>
+                {visibleCareRequests.length === 0 ? (
+                  <Paper sx={{ p: 2.5, border: 1, borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      {requestTab === 0 ? 'No requests waiting for your review' : requestTab === 1 ? 'No approved patients yet' : 'No declined requests'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {requestTab === 0 ? 'The admin team will assign patients based on expertise and availability.' : 'Requests will appear here as you review assigned patients.'}
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <Grid container spacing={2}>
+                    {visibleCareRequests.map((careRequest) => {
+                      const relatedAppointments = appointments.filter((appointment) => appointment.careRequestId === careRequest.id);
+                      return (
+                        <Grid size={{ xs: 12, lg: 6 }} key={careRequest.id}>
+                          <Card sx={{ height: '100%' }}>
+                            <CardContent>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
+                                <Box id="upcoming-sessions" sx={{ scrollMarginTop: 96 }}>
+                                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{careRequest.patientName}</Typography>
+                                  <Typography variant="caption" color="text.secondary">Request {careRequest.id}</Typography>
+                                </Box>
+                                <Chip label={careRequest.status.replaceAll('_', ' ')} size="small" color={careRequest.status === 'rejected' ? 'error' : 'warning'} />
                               </Box>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
+                              <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                                <Grid size={{ xs: 6 }}>
+                                  <Typography variant="caption" color="text.secondary">PREFERRED DATE</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{careRequest.preferredDate}</Typography>
+                                </Grid>
+                                <Grid size={{ xs: 6 }}>
+                                  <Typography variant="caption" color="text.secondary">TIME / FORMAT</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{careRequest.preferredTime} · {careRequest.preferredFormat}</Typography>
+                                </Grid>
+                              </Grid>
+                              <Typography variant="caption" color="text.secondary">PATIENT INTAKE</Typography>
+                              <Typography variant="body2" sx={{ minHeight: 40, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mb: 2 }}>
+                                {careRequest.intakeNotes || 'No additional intake notes.'}
+                              </Typography>
+
+                              {relatedAppointments.length > 0 && (
+                                <Box sx={{ mb: 2, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                                  <Typography variant="caption" color="text.secondary">LINKED APPOINTMENTS</Typography>
+                                  {relatedAppointments.map((appointment) => (
+                                    <Typography key={appointment.id} variant="body2">
+                                      {appointment.appointmentKind === 'discovery' ? 'Discovery call' : 'Session'} · {appointment.date} · {appointment.time} · {appointment.status}
+                                    </Typography>
+                                  ))}
+                                </Box>
+                              )}
+
+                              {careRequest.status === 'assigned' && careRequest.assignedCounselorId === currentUser.id && (
+                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                  <Button size="small" variant="contained" onClick={() => handleAcceptCareRequest(careRequest)}>Accept request</Button>
+                                  <Button size="small" color="error" variant="outlined" onClick={() => { setDecisionRequest(careRequest); setDecisionReason(''); }}>Return to admin</Button>
+                                </Box>
+                              )}
+                              {careRequest.status === 'accepted' && careRequest.assignedCounselorId === currentUser.id && (
+                                <Button size="small" variant="contained" onClick={() => handleOpenRequestSchedule(careRequest, 'discovery')}>Schedule discovery call</Button>
+                              )}
+                              {['discovery_scheduled', 'discovery_completed'].includes(careRequest.status) && (
+                                <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                                  <Typography variant="caption" color="text.secondary">DISCOVERY CALL NOTES</Typography>
+                                  <TextField
+                                    fullWidth
+                                    multiline
+                                    minRows={3}
+                                    size="small"
+                                    sx={{ mt: 0.75, mb: 1 }}
+                                    placeholder="Record the patient's needs, goals, and recommended next steps."
+                                    value={discoveryNotesDrafts[careRequest.id] ?? careRequest.discoveryNotes ?? ''}
+                                    disabled={careRequest.assignedCounselorId !== currentUser.id}
+                                    onChange={(event) => setDiscoveryNotesDrafts((previous) => ({ ...previous, [careRequest.id]: event.target.value }))}
+                                  />
+                                  {careRequest.assignedCounselorId === currentUser.id && (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => handleSaveDiscoveryNotes(careRequest)}
+                                      disabled={discoveryNotesSaving === careRequest.id}
+                                    >
+                                      {discoveryNotesSaving === careRequest.id ? <CircularProgress size={18} /> : 'Save discovery notes'}
+                                    </Button>
+                                  )}
+                                </Box>
+                              )}
+                              {careRequest.status === 'discovery_completed' && careRequest.assignedCounselorId === currentUser.id && (
+                                <Box sx={{ mt: 1.5 }}>
+                                  {careRequest.finalCounselorId ? (
+                                    <Chip label={`Ongoing care: ${careRequest.finalCounselorName}`} color="success" size="small" />
+                                  ) : (
+                                    <Button size="small" variant="contained" onClick={() => { setFinalAssignmentRequest(careRequest); setFinalCounselorId(currentUser.id); setFinalAssignmentReason(''); }}>
+                                      Assign ongoing counselor
+                                    </Button>
+                                  )}
+                                </Box>
+                              )}
+                              {['discovery_completed', 'active'].includes(careRequest.status) && careRequest.finalCounselorId === currentUser.id && (
+                                <Box sx={{ mt: 1.5 }}>
+                                  {careRequest.finalCounselorId && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>Assigned for ongoing care</Typography>}
+                                  <Button size="small" variant="contained" onClick={() => handleOpenRequestSchedule(careRequest, 'session')}>Schedule follow-up session</Button>
+                                </Box>
+                              )}
+                              {careRequest.status === 'rejected' && (
+                                <Alert severity="info" sx={{ mt: 1.5 }}>{careRequest.rejectedReason || 'Returned to admin for reassignment.'}</Alert>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                )}
+              </Box>
+
+              {/* Upcoming Appointments */}
+              <Box id="upcoming-sessions" sx={{ scrollMarginTop: 96 }}>
+                <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
+                  Upcoming Sessions
+                </Typography>
+                {upcomingSessions.length === 0 ? (
+                  <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
+                    <Typography variant="body1" color="text.secondary">
+                      No upcoming appointments scheduled at this moment.
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <Grid container spacing={3}>
+                    {upcomingSessions.map((apt) => (
+                      <Grid item xs={12} md={6} key={apt.id}>
+                        <Card sx={{ borderLeft: '6px solid #10b981' }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700 }}>{apt.patientName}</Typography>
+                              <Chip label="Upcoming" color="success" size="small" />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                              Schedule: <strong>{apt.date}</strong> at <strong>{apt.time}</strong> (60m)
+                            </Typography>
+
+                            <Typography variant="body2" sx={{
+                              mb: 2,
+                              p: 1.5,
+                              bgcolor: 'action.hover',
+                              borderRadius: 2,
+                              fontStyle: apt.intakeNotes ? 'normal' : 'italic'
+                            }}>
+                              <strong>Patient Intake notes:</strong> {apt.intakeNotes || 'None provided.'}
+                            </Typography>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column', width: '100%' }}>
+                              {apt.appointmentType === 'In-Person Consultation' ? (
+                                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2, border: '1px solid', borderColor: 'divider', width: '100%', mb: 1 }}>
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                    OFFLINE / IN-PERSON MEETING
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mt: 0.5 }}>
+                                    Address: {apt.clinicAddress || '102 Medical Wellness Center, Suite 300, California'}
+                                  </Typography>
+                                </Box>
+                              ) : (
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  startIcon={<VideoCallIcon />}
+                                  onClick={() => navigate(`/session/${apt.id}`)}
+                                  sx={{ mb: 1 }}
+                                >
+                                  Join Room
+                                </Button>
+                              )}
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  startIcon={<AssignmentIcon />}
+                                  onClick={() => handleOpenNotes(apt)}
+                                  sx={{ flexGrow: 1 }}
+                                >
+                                  Clinical Notes
+                                </Button>
+                                <Button
+                                  variant="text"
+                                  color="error"
+                                  size="small"
+                                  onClick={() => handleUpdateStatus(apt.id, 'cancelled')}
+                                >
+                                  Cancel
+                                </Button>
+                              </Box>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
                     ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Box>
-        </Box>
+                  </Grid>
+                )}
+              </Box>
+
+              {/* Past Appointments History */}
+              <Box id="past-consultations" sx={{ scrollMarginTop: 96 }}>
+                <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
+                  Historical Consultations
+                </Typography>
+                {pastSessions.length === 0 ? (
+                  <Typography variant="body1" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    No past consultations recorded.
+                  </Typography>
+                ) : (
+                  <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Patient Name</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Consultation Date</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="right">Notes & Reviews</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {pastSessions.map((apt) => (
+                          <TableRow key={apt.id}>
+                            <TableCell sx={{ fontWeight: 600 }}>{apt.patientName}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2">{apt.date}</Typography>
+                              <Typography variant="caption" color="text.secondary">{apt.time}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={apt.status}
+                                color={apt.status === 'completed' ? 'success' : 'error'}
+                                size="small"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                                <Button size="small" variant="text" onClick={() => handleOpenNotes(apt)}>
+                                  View Clinical Note
+                                </Button>
+                                {apt.review && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <StarRateIcon sx={{ color: 'warning.main', fontSize: 16 }} />
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      Patient rated {apt.review.rating}/5
+                                    </Typography>
+                                  </Box>
+                                )}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+            </Box>
           </Grid>
         </Grid>
       )}
@@ -1004,7 +1124,7 @@ export default function CounselorDashboard({ currentUser }) {
                               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
                                 Slot {slotIdx + 1}:
                               </Typography>
-                              
+
                               <FormControl size="small" sx={{ minWidth: 120 }}>
                                 <InputLabel>Start Time</InputLabel>
                                 <Select
@@ -1092,66 +1212,7 @@ export default function CounselorDashboard({ currentUser }) {
               </Button>
             </Card>
           </Grid>
-          <Grid item xs={12} md={5}>
-            <Card sx={{ p: 4, bgcolor: 'action.hover', position: 'sticky', top: 24 }}>
-              <Typography variant="h6" sx={{ fontFamily: 'Outfit', fontWeight: 700, mb: 2 }}>
-                Current Cal-Sync Configuration
-              </Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                Patients booking slots on the platform will only see openings matching this availability matrix.
-              </Typography>
-              
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box id="past-consultations" sx={{ scrollMarginTop: 96 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
-                    SESSION LENGTH
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                    {slotDuration} Minutes per session
-                  </Typography>
-                </Box>
 
-                <Divider />
-
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 1 }}>
-                    WEEKLY MATRIX
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    {DAYS.map(day => {
-                      const dayConf = daysConfig.find(d => d.dayIndex === day.value);
-                      const isActive = dayConf?.active;
-                      return (
-                        <Box key={day.value} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: isActive ? 'text.primary' : 'text.disabled' }}>
-                            {day.label}
-                          </Typography>
-                          {isActive ? (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end', maxWidth: '70%' }}>
-                              {dayConf.slots.map((s, idx) => (
-                                <Chip
-                                  key={idx}
-                                  label={`${s.startHour}-${s.endHour}`}
-                                  size="small"
-                                  color="primary"
-                                  variant="outlined"
-                                  sx={{ fontSize: '0.75rem', height: 20 }}
-                                />
-                              ))}
-                            </Box>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic' }}>
-                              Closed
-                            </Typography>
-                          )}
-                        </Box>
-                      );
-                    })}
-                  </Box>
-                </Box>
-              </Box>
-            </Card>
-          </Grid>
         </Grid>
       )}
 

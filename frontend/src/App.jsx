@@ -4,7 +4,7 @@ import {
   ThemeProvider, CssBaseline, AppBar, Toolbar, Typography, Button, 
   Box, IconButton, Dialog, DialogTitle, DialogContent, Alert, TextField, 
   Tabs, Tab, CircularProgress, Tooltip, Menu, MenuItem, Avatar,
-  Divider, Grid, FormControl, InputLabel, Select, Badge, Popover, Snackbar
+  Divider, Grid, FormControl, InputLabel, Select, Badge, Popover, Snackbar, Chip
 } from '@mui/material';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
@@ -14,13 +14,11 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import PersonIcon from '@mui/icons-material/Person';
 import { getTheme } from './theme';
 import { api } from './api';
-
-const validateMobile = (num) => {
-  const digits = num.replace(/\D/g, '');
-  return digits.length === 10;
-};
 
 // Pages imports
 import SessionRequest from './pages/SessionRequest';
@@ -29,7 +27,12 @@ import CounselorDashboard from './pages/CounselorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SessionRoom from './pages/SessionRoom';
 
-const isMobile = window.innerWidth <= 600
+const isMobile = typeof window !== 'undefined' && window.innerWidth <= 600;
+
+const validateMobile = (num) => {
+  const digits = (num || '').replace(/\D/g, '');
+  return digits.length === 10;
+};
 
 // Custom wrapper to protect routes based on auth status and roles
 function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired }) {
@@ -64,35 +67,6 @@ function AppContent({ themeMode, toggleTheme }) {
   const [currentUser, setCurrentUser] = useState(api.getCurrentUser());
   const [notifications, setNotifications] = useState([]);
   const [notifAnchorEl, setNotifAnchorEl] = useState(null);
-  
-  const fetchNotifications = useCallback(async () => {
-    if (!api.getToken()) return;
-    try {
-      const data = await api.getNotifications();
-      setNotifications(data || []);
-    } catch (err) {
-      console.error('Failed to load notifications', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchNotifications();
-      const interval = setInterval(fetchNotifications, 10000);
-      return () => clearInterval(interval);
-    } else {
-      setNotifications([]);
-    }
-  }, [currentUser, fetchNotifications]);
-
-  const handleMarkNotifRead = async (id) => {
-    try {
-      await api.markNotificationRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState(0); // 0 = Login, 1 = Register
@@ -131,6 +105,44 @@ function AppContent({ themeMode, toggleTheme }) {
   // User Dropdown anchor
   const [anchorEl, setAnchorEl] = useState(null);
 
+  useEffect(() => {
+    const handleInvalidToken = () => {
+      setCurrentUser(null);
+      setAuthOpen(true);
+      setAuthError('Your session has expired or is invalid. Please sign in again.');
+    };
+    window.addEventListener('auth-invalid-token', handleInvalidToken);
+    return () => window.removeEventListener('auth-invalid-token', handleInvalidToken);
+  }, []);
+  
+  const fetchNotifications = useCallback(async () => {
+    if (!api.getToken()) return;
+    try {
+      const data = await api.getNotifications();
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 10000);
+      return () => clearInterval(interval);
+    } else {
+      setNotifications([]);
+    }
+  }, [currentUser, fetchNotifications]);
+
+  const handleMarkNotifRead = async (id) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error(err);
+    }
+  };
   const handleOpenAuth = () => {
     setAuthError('');
     setName('');
@@ -408,7 +420,16 @@ function AppContent({ themeMode, toggleTheme }) {
             {/* Auth options */}
             {currentUser ? (
               <Box>
-                <IconButton onClick={handleMenuOpen} sx={{ p: 0.5 }}>
+                <IconButton 
+                  onClick={handleMenuOpen} 
+                  sx={{ 
+                    p: 0.5,
+                    border: '2px solid',
+                    borderColor: 'primary.light',
+                    transition: 'all 0.2s ease',
+                    '&:hover': { transform: 'scale(1.05)', borderColor: 'primary.main' }
+                  }}
+                >
                   <Avatar src={currentUser.avatar} sx={{ width: 36, height: 36 }} />
                 </IconButton>
                 <Menu
@@ -417,23 +438,124 @@ function AppContent({ themeMode, toggleTheme }) {
                   onClose={handleMenuClose}
                   anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                   transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  PaperProps={{
+                    elevation: 6,
+                    sx: {
+                      minWidth: 260,
+                      borderRadius: 3,
+                      p: 1,
+                      mt: 1,
+                      overflow: 'visible',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    }
+                  }}
                 >
-                  <MenuItem disabled>
-                    <Box sx={{ py: 0.5 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{currentUser.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{currentUser.email}</Typography>
+                  {/* User Profile Card Header */}
+                  <Box sx={{
+                    p: 1.75,
+                    mb: 1,
+                    borderRadius: 2.5,
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.06) 100%)',
+                    border: '1px solid rgba(99,102,241,0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: 0.5
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                      <Avatar 
+                        src={currentUser.avatar} 
+                        sx={{ 
+                          width: 44, 
+                          height: 44, 
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                          border: '2px solid #ffffff'
+                        }} 
+                      />
+                      <Box sx={{ overflow: 'hidden', flex: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: 'Outfit', lineHeight: 1.2, noWrap: true }}>
+                          {currentUser.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {currentUser.email}
+                        </Typography>
+                      </Box>
                     </Box>
-                  </MenuItem>
-                  <Divider />
+
+                    {/* Role Badge */}
+                    <Chip 
+                      size="small"
+                      icon={
+                        currentUser.role === 'counselor' 
+                          ? <PsychologyIcon sx={{ fontSize: '15px !important' }} /> 
+                          : currentUser.role === 'admin' 
+                            ? <AdminPanelSettingsIcon sx={{ fontSize: '15px !important' }} /> 
+                            : <PersonIcon sx={{ fontSize: '15px !important' }} />
+                      }
+                      label={`Role: ${currentUser.role || 'user'}`}
+                      sx={{
+                        mt: 0.75,
+                        fontWeight: 700,
+                        fontSize: '0.72rem',
+                        textTransform: 'capitalize',
+                        letterSpacing: '0.2px',
+                        bgcolor: currentUser.role === 'counselor' 
+                          ? 'rgba(99,102,241,0.14)' 
+                          : currentUser.role === 'admin' 
+                            ? 'rgba(239,68,68,0.14)' 
+                            : 'rgba(16,185,129,0.14)',
+                        color: currentUser.role === 'counselor' 
+                          ? '#4f46e5' 
+                          : currentUser.role === 'admin' 
+                            ? '#dc2626' 
+                            : '#059669',
+                        border: '1px solid',
+                        borderColor: currentUser.role === 'counselor' 
+                          ? 'rgba(99,102,241,0.3)' 
+                          : currentUser.role === 'admin' 
+                            ? 'rgba(239,68,68,0.3)' 
+                            : 'rgba(16,185,129,0.3)'
+                      }}
+                    />
+                  </Box>
+
                   <MenuItem 
                     component={Link} 
                     to={currentUser.role === 'admin' ? '/admin' : '/dashboard'} 
                     onClick={handleMenuClose}
+                    sx={{
+                      borderRadius: 1.5,
+                      py: 1,
+                      px: 1.5,
+                      fontWeight: 600,
+                      gap: 1.25,
+                      fontSize: '0.9rem',
+                      '&:hover': { bgcolor: 'action.hover' }
+                    }}
                   >
+                    <DashboardIcon fontSize="small" sx={{ color: 'primary.main' }} />
                     Dashboard View
                   </MenuItem>
-                  <MenuItem onClick={handleLogout}>
-                    <LogoutIcon fontSize="small" sx={{ mr: 1 }} /> Log Out
+
+                  <Divider sx={{ my: 0.5 }} />
+
+                  <MenuItem 
+                    onClick={handleLogout}
+                    sx={{
+                      borderRadius: 1.5,
+                      py: 1,
+                      px: 1.5,
+                      fontWeight: 600,
+                      gap: 1.25,
+                      fontSize: '0.9rem',
+                      color: 'error.main',
+                      '&:hover': { bgcolor: 'error.lighter', color: 'error.dark' }
+                    }}
+                  >
+                    <LogoutIcon fontSize="small" sx={{ color: 'error.main' }} />
+                    Log Out
                   </MenuItem>
                 </Menu>
               </Box>
