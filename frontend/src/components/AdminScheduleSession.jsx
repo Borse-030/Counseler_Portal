@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { api } from '../api';
+import { sessionTypesForAvailability, slotSupportsMode } from '../utils/sessionMode';
 
 const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
@@ -31,8 +32,14 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
     let active = true;
     const ids = counselorKey ? counselorKey.split(',') : [];
     Promise.all(ids.map(async id => {
-      try { return [id, { types: await api.getCounselorAppointmentTypes(id) }]; }
-      catch (err) { return [id, { error: err.message || 'Unable to load session modes.' }]; }
+      const [weekly, custom] = await Promise.allSettled([
+        api.getCounselorAvailability(id), api.getCounselorAppointmentTypes(id),
+      ]);
+      return [id, {
+        availability: weekly.status === 'fulfilled' ? weekly.value : null,
+        types: custom.status === 'fulfilled' ? custom.value : [],
+        error: weekly.status === 'rejected' ? weekly.reason.message || 'Unable to load session modes.' : '',
+      }];
     })).then(entries => { if (active) setDetails(Object.fromEntries(entries)); });
     return () => { active = false; };
   }, [counselorKey]);
@@ -51,16 +58,18 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
 
   const ready = availability?.key === availabilityKey;
   const selected = counselors.find(c => c.id === counselorId);
-  const types = details?.[counselorId]?.types || [];
-  const slots = ready ? (availability.data[counselorId]?.slots || []).filter(s => s.available) : [];
+  const counselorTypes = id => sessionTypesForAvailability(details?.[id]?.availability, details?.[id]?.types, ready ? availability.data[id]?.slots : []);
+  const types = counselorTypes(counselorId);
+  const slots = ready ? (availability.data[counselorId]?.slots || []).filter(s => s.available && slotSupportsMode(s, mode)) : [];
   const validMode = types.some(type => type.name === mode);
   const validTime = slots.some(slot => slot.time === time);
   const canSubmit = selected && validMode && validTime && date >= todayIST() && !busy;
   const chooseCounselor = counselor => {
     setCounselorId(counselor.id);
     setTime('');
-    const preferred = request.preferredFormat || request.appointmentType || request.supportType;
-    const offered = details?.[counselor.id]?.types || [];
+    const preference = request.preferredFormat || request.appointmentType || request.supportType;
+    const preferred = preference === 'Online Consultation' ? 'Video Consultation' : preference;
+    const offered = counselorTypes(counselor.id);
     setMode(offered.find(type => type.name === preferred)?.name || (offered.length === 1 ? offered[0].name : ''));
     setError('');
   };
@@ -123,6 +132,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
           {visible.map(c => {
             const info = details?.[c.id];
+            const offeredTypes = counselorTypes(c.id);
             const day = ready ? availability.data[c.id] : null;
             const availableSlots = day?.slots?.filter(slot => slot.available) || [];
             return <Paper variant="outlined" key={c.id} sx={{ p: 2, borderColor: counselorId === c.id ? 'primary.main' : 'divider', borderWidth: counselorId === c.id ? 2 : 1 }}>
@@ -134,10 +144,10 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
                 <Typography variant="body2" fontWeight={600}>{c.specialty || 'Expertise not listed'}</Typography>
                 <Typography variant="body2" color="text.secondary">{c.credentials || 'Credentials not listed'} · {c.experience == null ? 'Experience not listed' : `${c.experience} years experience`}</Typography>
                 <Typography variant="body2" color="text.secondary">Languages: {(c.languages || []).join(', ') || 'Not listed'}</Typography>
-                <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.75 }}>{info?.types?.map(type => <Chip size="small" variant="outlined" label={type.name} key={type.id || type.name} />)}</Stack>
-                {!info ? <Typography variant="caption">Loading modes…</Typography> : info.error ? <Typography variant="caption" color="error">{info.error}</Typography> : !info.types.length && <Typography variant="caption" color="text.secondary">No session modes configured.</Typography>}
-                {!day ? <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}><CircularProgress size={14} /><Typography variant="caption">{date && date >= todayIST() ? 'Checking availability…' : 'Choose a valid session date.'}</Typography></Stack> : <Typography variant="body2" color={availableSlots.length ? 'success.main' : 'text.secondary'}>{availableSlots.length ? `${availableSlots.length} available times (IST): ${availableSlots.slice(0, 5).map(s => s.time).join(', ')}${availableSlots.length > 5 ? '…' : ''}` : day.message || 'No available times for this date.'}</Typography>}
-                <Button variant={counselorId === c.id ? 'contained' : 'outlined'} disabled={busy || !info?.types?.length} aria-pressed={counselorId === c.id} onClick={() => chooseCounselor(c)}>{counselorId === c.id ? 'Selected counselor' : 'Select counselor'}</Button>
+                <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.75 }}>{offeredTypes.map(type => <Chip size="small" variant="outlined" label={type.name} key={type.id || type.name} />)}</Stack>
+                {!offeredTypes.length && (!info ? <Typography variant="caption">Loading modes…</Typography> : info.error ? <Typography variant="caption" color="error">{info.error}</Typography> : <Typography variant="caption" color="text.secondary">No active availability blocks configured.</Typography>)}
+                {!day ? <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}><CircularProgress size={14} /><Typography variant="caption">{date && date >= todayIST() ? 'Checking availability…' : 'Choose a valid session date.'}</Typography></Stack> : <Typography variant="body2" color={availableSlots.length ? 'success.main' : 'text.secondary'}>{availableSlots.length ? `${availableSlots.length} available times (IST): ${availableSlots.slice(0, 5).map(s => `${s.time}${s.modes ? ` (${s.modes.join(' / ')})` : ''}`).join(', ')}${availableSlots.length > 5 ? '…' : ''}` : day.message || 'No available times for this date.'}</Typography>}
+                <Button variant={counselorId === c.id ? 'contained' : 'outlined'} disabled={busy} aria-pressed={counselorId === c.id} onClick={() => chooseCounselor(c)}>{counselorId === c.id ? 'Selected counselor' : 'Select counselor'}</Button>
               </Stack>
             </Paper>;
           })}

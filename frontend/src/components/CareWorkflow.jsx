@@ -14,12 +14,12 @@ function ScheduleRow({ value, onChange, counselorId, disabled }) {
   useEffect(() => {
     let active = true;
     if (!counselorId || !value.date) return;
-    api.getCounselorSlots(counselorId, value.date, value.duration).then(data => {
-      if (active) setAvailability({ ...data, key: `${counselorId}/${value.date}/${value.duration}` });
+    api.getCounselorSlots(counselorId, value.date, value.duration, value.appointmentType).then(data => {
+      if (active) setAvailability({ ...data, key: `${counselorId}/${value.date}/${value.duration}/${value.appointmentType}` });
     }).catch(error => { if (active) setAvailability({ error: error.message }); });
     return () => { active = false; };
-  }, [counselorId, value.date, value.duration]);
-  const ready = availability?.key === `${counselorId}/${value.date}/${value.duration}`;
+  }, [counselorId, value.date, value.duration, value.appointmentType]);
+  const ready = availability?.key === `${counselorId}/${value.date}/${value.duration}/${value.appointmentType}`;
   const slots = ready ? availability.slots?.filter(slot => slot.available) || [] : [];
   return <Stack spacing={2} sx={{ py: 1 }}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -37,7 +37,7 @@ function ScheduleRow({ value, onChange, counselorId, disabled }) {
     <TextField select label="Session purpose" value={value.kind} disabled={disabled} onChange={e => onChange({ ...value, kind: e.target.value })}>
       <MenuItem value="session">Counseling session</MenuItem><MenuItem value="follow_up">Follow-up call / session</MenuItem>
     </TextField>
-    <TextField select label="Format" value={value.appointmentType} disabled={disabled} onChange={e => onChange({ ...value, appointmentType: e.target.value })}>
+    <TextField select label="Format" value={value.appointmentType} disabled={disabled} onChange={e => onChange({ ...value, appointmentType: e.target.value, time: '' })}>
       <MenuItem value="Video Consultation">Video meeting</MenuItem><MenuItem value="Audio Consultation">Phone call</MenuItem><MenuItem value="In-Person Consultation">In person</MenuItem>
     </TextField>
     <TextField label="Meeting link (optional)" type="url" value={value.meetingLink} disabled={disabled} placeholder="https://…" helperText="Use the BJS meeting link, or contact the user by phone." onChange={e => onChange({ ...value, meetingLink: e.target.value })} />

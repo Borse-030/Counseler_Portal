@@ -1,3 +1,5 @@
+import { validateSchedule } from '../utils/scheduling.js';
+import { appointmentMode, dayIntervals, modesAtTime, toMinutes, validDate, validateDayConfigs } from '../utils/availabilityModes.js';
 import { User, Availability, Appointment, AppointmentType, Exception, BookingLimit, AuditLog } from '../models/index.js';
 
 const logAction = async (userId, action, req) => {
@@ -236,17 +238,23 @@ export const getAvailability = async (req, res) => {
 export const updateAvailability = async (req, res) => {
   const { workingDays, startHour, endHour, slotDuration, daysConfig } = req.body;
 
+  const configError = daysConfig === undefined ? '' : validateDayConfigs(daysConfig);
+  if (configError) return res.status(400).json({ message: configError });
+  const duration = Number(slotDuration ?? 60);
+  if (!Number.isInteger(duration) || duration < 10 || duration > 180) return res.status(400).json({ message: 'Slot interval must be from 10 to 180 minutes.' });
+  const normalizedDays = daysConfig?.map(day => ({ dayIndex: day.dayIndex, active: day.active, slots: day.slots.map(slot => ({ startHour: slot.startHour, endHour: slot.endHour, mode: slot.mode || 'both' })) }));
+
   try {
     const updatedAvailability = await Availability.findOneAndUpdate(
       { counselorId: req.userId },
       {
-        workingDays: workingDays || [1, 2, 3, 4, 5],
+        workingDays: normalizedDays ? normalizedDays.filter(day => day.active).map(day => day.dayIndex) : workingDays || [1, 2, 3, 4, 5],
         startHour: startHour || '09:00',
         endHour: endHour || '17:00',
-        slotDuration: Number(slotDuration) || 60,
-        daysConfig: daysConfig || []
+        slotDuration: duration,
+        daysConfig: normalizedDays || []
       },
-      { new: true, upsert: true }
+      { new: true, upsert: true, runValidators: true }
     );
 
     await logAction(req.userId, 'Updated weekly working schedule config', req);
@@ -257,133 +265,26 @@ export const updateAvailability = async (req, res) => {
 };
 
 export const getSlots = async (req, res) => {
-  const { date } = req.query;
-  if (!date) {
-    return res.status(400).json({ message: 'Date query parameter is required (YYYY-MM-DD)' });
-  }
-
-  const counselorId = req.params.id;
-
+  const { date, appointmentType = '' } = req.query;
+  const duration = Number(req.query.duration || 60);
+  if (!validDate(date) || !Number.isInteger(duration) || duration < 10 || duration > 180) return res.status(400).json({ message: 'Choose a valid date and a duration from 10 to 180 minutes.' });
   try {
-    const limits = await BookingLimit.findOne({ counselorId }) || {
-      counselorId,
-      maxAppointmentsPerDay: 5,
-      minNoticePeriodHours: 2,
-      maxAdvanceBookingDays: 30
-    };
-
-    const exceptions = await Exception.find({ counselorId });
-    const availability = await Availability.findOne({ counselorId }) || {
-      counselorId,
-      workingDays: [1, 2, 3, 4, 5],
-      startHour: '09:00',
-      endHour: '17:00',
-      slotDuration: 60
-    };
-
-    const isException = exceptions.some(ex => ex.date === date);
-    if (isException) {
-      return res.json({ date, slots: [], message: 'Counselor is on leave or vacation today.' });
-    }
-
-    const queryDate = new Date(date);
-    const dayOfWeek = queryDate.getDay();
-
-    const dayConfig = availability.daysConfig && availability.daysConfig.find(d => d.dayIndex === dayOfWeek);
-
-    let isWorkingDay = false;
-    let timeIntervals = [];
-
-    if (dayConfig) {
-      isWorkingDay = dayConfig.active;
-      if (isWorkingDay && dayConfig.slots) {
-        timeIntervals = dayConfig.slots;
-      }
-    } else {
-      isWorkingDay = availability.workingDays.includes(dayOfWeek);
-      if (isWorkingDay) {
-        timeIntervals = [{ startHour: availability.startHour, endHour: availability.endHour }];
+    const counselorId = req.params.id;
+    const availability = await Availability.findOne({ counselorId }) || { workingDays: [1, 2, 3, 4, 5], startHour: '09:00', endHour: '17:00', slotDuration: 60 };
+    const intervals = dayIntervals(availability, date);
+    const step = Math.max(1, Number(availability.slotDuration) || 60);
+    const times = new Set();
+    for (const interval of intervals) {
+      for (let start = toMinutes(interval.startHour); start + duration <= toMinutes(interval.endHour); start += step) {
+        const time = `${String(Math.floor(start / 60)).padStart(2, '0')}:${String(start % 60).padStart(2, '0')}`;
+        const modes = modesAtTime(intervals, time, duration, step);
+        if (!appointmentType || modes.includes(appointmentMode(appointmentType))) times.add(time);
       }
     }
-
-    if (!isWorkingDay) {
-      return res.json({ date, slots: [], message: 'Counselor does not work on this day.' });
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (queryDate < today) {
-      return res.json({ date, slots: [], message: 'Cannot book in the past.' });
-    }
-
-    const maxAdvance = new Date();
-    maxAdvance.setDate(maxAdvance.getDate() + limits.maxAdvanceBookingDays);
-    if (queryDate > maxAdvance) {
-      return res.json({ date, slots: [], message: `Cannot book more than ${limits.maxAdvanceBookingDays} days in advance.` });
-    }
-
-    const appointments = await Appointment.find({
-      counselorId,
-      date: date,
-      status: { $in: ['upcoming', 'pending_admin', 'completed'] }
-    });
-
-    if (appointments.length >= limits.maxAppointmentsPerDay) {
-      return res.json({ date, slots: [], message: 'Counselor daily appointment limit reached.' });
-    }
-
-    const slots = [];
-    const duration = availability.slotDuration || 60;
-    const now = new Date();
-
-    for (const interval of timeIntervals) {
-      if (!interval.startHour || !interval.endHour) continue;
-      const [startH, startM] = interval.startHour.split(':').map(Number);
-      const [endH, endM] = interval.endHour.split(':').map(Number);
-
-      let current = new Date();
-      current.setHours(startH, startM, 0, 0);
-
-      const end = new Date();
-      end.setHours(endH, endM, 0, 0);
-
-      while (current < end) {
-        const hh = String(current.getHours()).padStart(2, '0');
-        const mm = String(current.getMinutes()).padStart(2, '0');
-        const timeStr = `${hh}:${mm}`;
-
-        let isPastSlot = false;
-
-        if (queryDate.toDateString() === now.toDateString()) {
-          const slotTime = new Date();
-          slotTime.setHours(current.getHours(), current.getMinutes(), 0, 0);
-
-          const noticeDeadline = new Date();
-          noticeDeadline.setHours(now.getHours() + limits.minNoticePeriodHours, now.getMinutes(), 0, 0);
-
-          if (slotTime <= noticeDeadline) {
-            isPastSlot = true;
-          }
-        }
-
-        const isBooked = appointments.some(apt => apt.time === timeStr);
-
-        if (!slots.some(s => s.time === timeStr)) {
-          slots.push({
-            time: timeStr,
-            available: !isBooked && !isPastSlot
-          });
-        }
-
-        current.setMinutes(current.getMinutes() + duration);
-      }
-    }
-
-    slots.sort((a, b) => a.time.localeCompare(b.time));
-
-    res.json({ date, slots });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    const slots = await Promise.all([...times].sort().map(async time => ({
+      time, modes: modesAtTime(intervals, time, duration, step),
+      available: !(await validateSchedule(counselorId, date, time, duration, '', '', appointmentType)),
+    })));
+    res.json({ date, slots, message: slots.some(slot => slot.available) ? '' : 'No available times for this date, duration, and session mode.' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
 };

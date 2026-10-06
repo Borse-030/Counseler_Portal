@@ -1,5 +1,6 @@
 import { User, Appointment, CareRequest, Transaction, AppointmentType, AuditLog } from '../models/index.js';
 import { sendNotification } from '../utils/notificationService.js';
+import { validateSchedule } from '../utils/scheduling.js';
 
 const logAction = async (userId, action, req) => {
   try {
@@ -113,6 +114,9 @@ export const createAppointment = async (req, res) => {
       description: 'Direct face-to-face video therapy.'
     };
 
+    const scheduleError = await validateSchedule(counselor.id, date, time, Number(selectedType.duration) || 60, '', patient.id, selectedType.name);
+    if (scheduleError) return res.status(400).json({ message: scheduleError });
+
     const aptId = `apt_${Date.now()}`;
     const txId = `tx_${Date.now()}`;
 
@@ -225,6 +229,9 @@ export const rescheduleAppointment = async (req, res) => {
     if (alreadyBooked) {
       return res.status(400).json({ message: 'The selected slot is already booked by another patient.' });
     }
+
+    const scheduleError = await validateSchedule(apt.counselorId, date, time, Number(apt.duration) || 60, apt.id, apt.patientId, apt.appointmentType);
+    if (scheduleError) return res.status(400).json({ message: scheduleError });
 
     const oldDate = apt.date;
     const oldTime = apt.time;

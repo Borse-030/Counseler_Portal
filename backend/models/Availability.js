@@ -14,7 +14,8 @@ const AvailabilitySchema = new mongoose.Schema({
         slots: [
           {
             startHour: { type: String, default: '09:00' },
-            endHour: { type: String, default: '17:00' }
+            endHour: { type: String, default: '17:00' },
+            mode: { type: String, enum: ['online', 'offline', 'both'], default: 'both' }
           }
         ]
       }

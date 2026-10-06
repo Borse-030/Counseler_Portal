@@ -1,5 +1,6 @@
+import { validateSchedule } from '../utils/scheduling.js';
 import crypto from 'crypto';
-import { Appointment, AppointmentType, Availability, BookingLimit, CareRequest, Exception, User } from '../models/index.js';
+import { Appointment, AppointmentType, CareRequest, User } from '../models/index.js';
 import { sendNotification } from '../utils/notificationService.js';
 
 import { createCareRequest } from '../utils/careRequestService.js';
@@ -24,84 +25,6 @@ const addTimeline = (careRequest, status, actor, note = '') => {
     note,
     at: new Date(),
   });
-};
-
-const validateSchedule = async (counselorId, date, time, requestedDuration = 0) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !/^\d{2}:\d{2}$/.test(time || '')) {
-    return 'Choose a valid date and time.';
-  }
-
-  const scheduled = new Date(`${date}T${time}:00`);
-  if (Number.isNaN(scheduled.getTime()) || scheduled <= new Date()) {
-    return 'The session must be scheduled for a future date and time.';
-  }
-
-  const counselor = await User.findOne({ id: counselorId, role: 'counselor', approved: true, suspended: { $ne: true } });
-  if (!counselor) return 'The assigned counselor is not active.';
-
-  const limits = await BookingLimit.findOne({ counselorId }) || {
-    maxAppointmentsPerDay: 5,
-    minNoticePeriodHours: 2,
-    maxAdvanceBookingDays: 30,
-  };
-  const dateOnly = new Date(`${date}T12:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const latestDate = new Date();
-  latestDate.setHours(23, 59, 59, 999);
-  latestDate.setDate(latestDate.getDate() + limits.maxAdvanceBookingDays);
-  if (dateOnly < today) return 'Sessions cannot be scheduled in the past.';
-  if (dateOnly > latestDate) return `Sessions can only be scheduled ${limits.maxAdvanceBookingDays} days ahead.`;
-
-  if (await Exception.findOne({ counselorId, date })) return 'The counselor is unavailable on this date.';
-
-  const availability = await Availability.findOne({ counselorId }) || {
-    workingDays: [1, 2, 3, 4, 5],
-    startHour: '09:00',
-    endHour: '17:00',
-    slotDuration: 60,
-    daysConfig: [],
-  };
-  const dayOfWeek = dateOnly.getDay();
-  const dayConfig = availability.daysConfig?.find((day) => day.dayIndex === dayOfWeek);
-  const isWorkingDay = dayConfig ? dayConfig.active : availability.workingDays.includes(dayOfWeek);
-  if (!isWorkingDay) return 'The counselor does not work on this day.';
-  const intervals = dayConfig?.active && dayConfig.slots?.length
-    ? dayConfig.slots
-    : [{ startHour: availability.startHour, endHour: availability.endHour }];
-  const toMinutes = (value) => {
-    const [hour, minute] = value.split(':').map(Number);
-    return hour * 60 + minute;
-  };
-  const requestedMinutes = toMinutes(time);
-  const slotDuration = Number(availability.slotDuration) || 60;
-  const withinAvailability = intervals.some((interval) => {
-    if (!interval.startHour || !interval.endHour) return false;
-    const intervalStart = toMinutes(interval.startHour);
-    const intervalEnd = toMinutes(interval.endHour);
-    const occupiedDuration = Number(requestedDuration) || slotDuration;
-    return requestedMinutes >= intervalStart && requestedMinutes < intervalEnd &&
-      (requestedMinutes - intervalStart) % slotDuration === 0 && requestedMinutes + occupiedDuration <= intervalEnd;
-  });
-  if (!withinAvailability) return 'Choose a time within the counselor\'s published availability.';
-
-  if (dateOnly.toDateString() === today.toDateString()) {
-    const hoursUntilSession = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
-    if (hoursUntilSession < limits.minNoticePeriodHours) {
-      return `This counselor requires ${limits.minNoticePeriodHours} hours of notice.`;
-    }
-  }
-
-  const appointments = await Appointment.find({ counselorId, date, status: { $in: ['upcoming', 'pending_admin'] } });
-  if (appointments.length >= limits.maxAppointmentsPerDay) return 'The counselor has reached the daily session limit.';
-  const requestedEnd = requestedMinutes + (Number(requestedDuration) || slotDuration);
-  const hasConflict = appointments.some((appointment) => {
-    const existingStart = toMinutes(appointment.time);
-    const existingEnd = existingStart + (Number(appointment.duration) || slotDuration);
-    return requestedMinutes < existingEnd && requestedEnd > existingStart;
-  });
-  if (hasConflict) return 'That counselor already has a session at this time.';
-  return '';
 };
 
 const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind, status = 'upcoming', purpose = '', duration: requestedDuration }) => {
@@ -383,13 +306,18 @@ export const scheduleSession = async (req, res) => {
     if (!proposed.length || proposed.length > 12) return res.status(400).json({ message: 'Propose between one and twelve sessions at a time.' });
     const normalized = proposed.map(item => ({
       ...item,
+      appointmentType: item.appointmentType || 'Video Consultation',
       kind: item.kind === 'follow_up' ? 'follow_up' : 'session',
     }));
     for (const item of normalized) {
       if (item.duration !== undefined && (!Number.isInteger(Number(item.duration)) || Number(item.duration) < 10 || Number(item.duration) > 180)) {
         return res.status(400).json({ message: 'Session duration must be between 10 and 180 minutes.' });
       }
-      const scheduleError = await validateSchedule(careRequest.finalCounselorId, item.date, item.time, item.duration);
+      if (item.duration === undefined) {
+        const type = await AppointmentType.findOne({ counselorId: careRequest.finalCounselorId, name: item.appointmentType === 'Online Consultation' ? 'Video Consultation' : item.appointmentType });
+        item.duration = Number(type?.duration) || 60;
+      }
+      const scheduleError = await validateSchedule(careRequest.finalCounselorId, item.date, item.time, Number(item.duration) || 60, '', careRequest.patientId, item.appointmentType);
       if (scheduleError) return res.status(400).json({ message: scheduleError });
     }
     for (let i = 0; i < normalized.length; i += 1) {

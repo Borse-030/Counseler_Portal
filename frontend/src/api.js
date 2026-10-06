@@ -179,9 +179,17 @@ export const api = {
     });
   },
 
-  getCounselorSlots: async (id, date, duration = 60) => {
-    return request(`/counselors/${id}/slots?date=${date}&duration=${duration}`);
+  getCounselorSlots: async (id, date, duration = 60, appointmentType = '') => {
+    const params = new URLSearchParams({ date, duration: String(duration) });
+    if (appointmentType) params.set('appointmentType', appointmentType);
+    return request(`/counselors/${id}/slots?${params}`);
   },
+
+  getCounselorBookingLimits: id => request(`/counselors/${id}/booking-limits`),
+  updateCounselorBookingLimits: limits => request('/counselors/booking-limits', { method: 'PUT', body: JSON.stringify(limits) }),
+  getCounselorExceptions: id => request(`/counselors/${id}/exceptions`),
+  addCounselorException: exception => request('/counselors/exceptions', { method: 'POST', body: JSON.stringify(exception) }),
+  deleteCounselorException: id => request(`/counselors/exceptions/${id}`, { method: 'DELETE' }),
 
   // Appointments API
   getAppointments: async () => {

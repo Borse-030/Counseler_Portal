@@ -15,6 +15,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import { api } from '../api';
+import { getScheduledSession } from '../utils/scheduledSession';
 
 const tableStyles = {
   borderRadius: 2, boxShadow: 'none',
@@ -56,13 +57,14 @@ function AccountList({ users, onToggle, onSelectCase, showCounselorDetails = fal
       </TableRow></TableHead>
       <TableBody>{users.map(user => {
         const request = requests.find(item => item.patientId === user.id);
+        const scheduledSession = getScheduledSession(request, appointments);
         const discovery = request && (['discovery_completed', 'matched', 'active', 'closed'].includes(request.status) || Boolean(request.discoveryNotes)) ? 'Completed' : 'Pending';
         return <TableRow key={user.id} hover>
         <TableCell sx={{ minWidth: 180 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}><Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.light', color: 'primary.dark', fontSize: 12, fontWeight: 700 }}>{initials(user.name)}</Avatar><Box><Typography variant="body2" fontWeight={650}>{user.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{user.email || user.mobile || 'Contact not provided'}</Typography></Box></Stack></TableCell>
         {showCounselorDetails && <><TableCell>{user.specialty || '—'}</TableCell><TableCell>{user.experience ? `${user.experience} years` : '—'}</TableCell></>}
         {showPatientLifecycle && <><TableCell>{request?.supportType || request?.caseType || request?.preferredFormat || 'Not specified'}</TableCell><TableCell><Chip size="small" color={discovery === 'Pending' ? 'warning' : 'success'} label={discovery} />{discovery === 'Completed' && request?.timeline?.length > 0 && <Typography variant="caption" display="block" color="text.secondary">{new Date([...request.timeline].reverse().find(event => event.status === 'discovery_completed')?.at || request.updatedAt).toLocaleDateString()}</Typography>}</TableCell><TableCell>{request?.finalCounselorName || 'Unassigned'}</TableCell><TableCell>{appointments.filter(appointment => appointment.patientId === user.id && appointment.status === 'completed' && ['session', 'follow_up', ''].includes(appointment.appointmentKind)).length}</TableCell></>}
         <TableCell sx={{ whiteSpace: 'nowrap' }}>{shortDate(user.createdAt)}</TableCell>
-        <TableCell align="right"><Box sx={{ display: 'grid', gridTemplateColumns: showPatientLifecycle ? '96px 112px 88px' : '88px', justifyContent: 'end', alignItems: 'center', gap: 0.75 }}>{showPatientLifecycle && <>{request ? <Button size="small" onClick={() => onSelectCase?.(user, request)}>{discovery === 'Pending' ? 'Log discovery' : 'Details'}</Button> : <Box />}{request && ['discovery_completed', 'matched', 'active'].includes(request.status) ? <Button size="small" variant="contained" onClick={() => onSelectCase?.(user, request, { schedule: true })}>Schedule session</Button> : <Box />}</>}<Button size="small" variant="outlined" color={user.suspended ? 'success' : 'error'} onClick={() => onToggle(user.id, user.suspended)}>{user.suspended ? 'Reactivate' : 'Deactivate'}</Button></Box></TableCell>
+        <TableCell align="right"><Box sx={{ display: 'grid', gridTemplateColumns: showPatientLifecycle ? '96px 112px 88px' : '88px', justifyContent: 'end', alignItems: 'center', gap: 0.75 }}>{showPatientLifecycle && <>{request ? <Button size="small" onClick={() => onSelectCase?.(user, request)}>{discovery === 'Pending' ? 'Log discovery' : 'Details'}</Button> : <Box />}{scheduledSession ? <Box sx={{ textAlign: 'center' }}><Button size="small" variant="outlined" onClick={() => onSelectCase?.(user, request)}>View session</Button><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontSize: 10 }}>Booked · {shortDate(scheduledSession.date)}<br />{scheduledSession.time} IST</Typography></Box> : request && ['discovery_completed', 'matched', 'active'].includes(request.status) ? <Button size="small" variant="contained" onClick={() => onSelectCase?.(user, request, { schedule: true })}>Schedule session</Button> : <Box />}</>}<Button size="small" variant="outlined" color={user.suspended ? 'success' : 'error'} onClick={() => onToggle(user.id, user.suspended)}>{user.suspended ? 'Reactivate' : 'Deactivate'}</Button></Box></TableCell>
       </TableRow>})}</TableBody>
     </Table>
   </TableContainer>;
@@ -272,6 +274,7 @@ export default function AdminDashboard({ currentUser }) {
     ? careRequests.find(request => request.id === selectedCase.request.id) || selectedCase.request
     : null;
   const assignedCounselor = users.find(user => user.id === currentCaseRequest?.finalCounselorId);
+  const scheduledCaseSession = getScheduledSession(currentCaseRequest, appointments);
   const discoveryIsComplete = Boolean(currentCaseRequest && (
     ['discovery_completed', 'matched', 'active', 'closed'].includes(currentCaseRequest.status) || currentCaseRequest.discoveryNotes
   ));
@@ -434,7 +437,7 @@ export default function AdminDashboard({ currentUser }) {
           {currentCaseRequest.finalCounselorId && ['matched', 'active'].includes(currentCaseRequest.status) && <Box>
             <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assigned counselor</Typography>
             <Typography variant="body2" color="text.secondary">{assignedCounselor?.name || currentCaseRequest.finalCounselorName || 'Counselor assigned'}</Typography>
-            <Button sx={{ mt: 1 }} variant="contained" onClick={() => setScheduleOpen(true)}>Schedule session with counselor</Button>
+            {scheduledCaseSession ? <Alert severity="success" sx={{ mt: 1 }}>Session booked for {shortDate(scheduledCaseSession.date)} at {scheduledCaseSession.time} IST · {scheduledCaseSession.appointmentType || 'Consultation'}</Alert> : <Button sx={{ mt: 1 }} variant="contained" onClick={() => setScheduleOpen(true)}>Schedule session with counselor</Button>}
           </Box>}
 
           <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
