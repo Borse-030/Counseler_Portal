@@ -60,20 +60,30 @@ const createDemoAppointments = () => {
       clinicAddress: 'MindEase Wellness Center, Pune',
       isDemo: true,
     },
-    {
-      id: 'demo-request-pending',
-      status: 'requested',
-      date: dateInDays(10),
-      time: '2:30 PM',
-      appointmentType: 'Online Consultation',
-      isDemo: true,
-    },
   ];
+};
+
+const createDemoSessionRequests = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 10);
+  return [{
+    id: 'demo-request-pending',
+    status: 'submitted',
+    patientName: 'You',
+    preferredDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+    preferredTime: 'Afternoon',
+    preferredFormat: 'Online Consultation',
+    intakeNotes: 'Support with stress and sleep.',
+    assignedCounselorName: '',
+    rejectedReason: '',
+    isDemo: true,
+  }];
 };
 
 export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
+  const [sessionRequests, setSessionRequests] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -100,11 +110,13 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
       setLoading(true);
       setError('');
       
-      const apts = await api.getAppointments();
-      const displayedAppointments = import.meta.env.DEV && apts.length === 0
+      const [apts, requests] = await Promise.all([api.getAppointments(), api.getSessionRequests()]);
+      const useDemoData = import.meta.env.DEV && apts.length === 0 && requests.length === 0;
+      const displayedAppointments = useDemoData
         ? createDemoAppointments()
         : apts;
       setAppointments(displayedAppointments);
+      setSessionRequests(useDemoData ? createDemoSessionRequests() : requests);
 
       // In a real database, transactions would be filtered for this patient.
       // Since transactions endpoints exist, we can use it or filter.
@@ -215,7 +227,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   };
 
   // Calculated metrics
-  const requestedApts = appointments.filter(a => a.status === 'requested' || a.status === 'pending');
+  const activeRequestStatuses = ['submitted', 'assigned', 'accepted', 'rejected', 'discovery_scheduled', 'discovery_completed', 'active'];
+  const requestedApts = sessionRequests.filter((request) => activeRequestStatuses.includes(request.status));
   const upcomingApts = appointments.filter(a => a.status === 'upcoming');
   const pastApts = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
   const profileGroups = [
@@ -405,7 +418,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
 
                             <Box sx={{ minWidth: 0, flex: 1 }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
-                                <Chip label={index === 0 ? 'Next session' : 'Confirmed'} size="small" color={index === 0 ? 'success' : 'primary'} />
+                                <Chip label={apt.appointmentKind === 'discovery' ? 'Discovery call' : index === 0 ? 'Next session' : 'Confirmed'} size="small" color={apt.appointmentKind === 'discovery' ? 'info' : index === 0 ? 'success' : 'primary'} />
                                 <Chip label="Assigned by care team" size="small" variant="outlined" />
                                 {apt.appointmentType && <Chip label={apt.appointmentType.replace(' Consultation', '')} size="small" variant="outlined" />}
                                 {apt.isDemo && <Chip label="Sample" size="small" variant="outlined" />}
@@ -468,10 +481,28 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                 </Paper>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {requestedApts.map((apt) => {
-                    const requestDate = getAppointmentDateParts(apt.date);
+                  {requestedApts.map((careRequest) => {
+                    const requestDate = getAppointmentDateParts(careRequest.preferredDate);
+                    const requestStage = {
+                      submitted: 0,
+                      assigned: 2,
+                      rejected: 1,
+                      accepted: 3,
+                      discovery_scheduled: 3,
+                      discovery_completed: 4,
+                      active: 4,
+                    }[careRequest.status] ?? 0;
+                    const requestStatusLabel = {
+                      submitted: 'Submitted',
+                      assigned: 'Counselor review',
+                      rejected: 'Returned for reassignment',
+                      accepted: 'Ready to schedule discovery',
+                      discovery_scheduled: 'Discovery scheduled',
+                      discovery_completed: 'Ready to plan sessions',
+                      active: 'Care plan active',
+                    }[careRequest.status] || 'In progress';
                     return (
-                      <Paper key={apt.id} sx={{ p: { xs: 2, sm: 2.5 }, border: 1, borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: 'warning.main', borderRadius: 2 }}>
+                      <Paper key={careRequest.id} sx={{ p: { xs: 2, sm: 2.5 }, border: 1, borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: careRequest.status === 'rejected' ? 'error.main' : 'warning.main', borderRadius: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                             <Box sx={{
@@ -490,17 +521,26 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                               <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.25 }}>{requestDate.day}</Typography>
                             </Box>
                             <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>{apt.counselorName ? `Assigned: ${apt.counselorName}` : 'Counselor assigned after review'}</Typography>
-                              <Typography variant="body2" color="text.secondary" noWrap>
-                                {apt.counselorSpecialty || 'Your care team is reviewing your request'}{apt.appointmentType ? ` · ${apt.appointmentType}` : ''}
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
+                                {careRequest.status === 'rejected'
+                                  ? 'The care team is finding another counselor'
+                                  : careRequest.finalCounselorName
+                                    ? `Ongoing counselor: ${careRequest.finalCounselorName}`
+                                    : careRequest.assignedCounselorName
+                                      ? `Discovery counselor: ${careRequest.assignedCounselorName}`
+                                      : 'Counselor assignment pending'}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary">{requestDate.weekday} · {apt.time || 'Time requested'}</Typography>
+                              <Typography variant="body2" color="text.secondary" noWrap>{careRequest.preferredFormat}</Typography>
+                              <Typography variant="caption" color="text.secondary">Preferred: {requestDate.weekday} · {careRequest.preferredTime}</Typography>
                             </Box>
                           </Box>
-                          <Chip label="Admin review" size="small" color="warning" />
+                          <Chip label={requestStatusLabel} size="small" color={careRequest.status === 'rejected' ? 'error' : 'warning'} />
                         </Box>
+                        {careRequest.rejectedReason && (
+                          <Alert severity="info" sx={{ mt: 1.5, py: 0 }}>{careRequest.rejectedReason}</Alert>
+                        )}
                         <Stepper
-                          activeStep={1}
+                          activeStep={requestStage}
                           alternativeLabel
                           sx={{
                             pt: 2.5,
@@ -509,7 +549,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                             '& .MuiStepIcon-root.Mui-completed': { color: 'success.main' },
                           }}
                         >
-                          {['Request submitted', 'Admin review', 'Counselor assigned'].map((label) => (
+                          {['Request', 'Assignment', 'Counselor review', 'Discovery call', 'Care plan'].map((label) => (
                             <Step key={label}><StepLabel>{label}</StepLabel></Step>
                           ))}
                         </Stepper>
@@ -555,7 +595,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                       <Divider sx={{ my: 1.5 }} />
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.date} · {apt.time}</Typography>
-                        {apt.status === 'completed' && (apt.review ? (
+                        {apt.status === 'completed' && apt.appointmentKind !== 'discovery' && (apt.review ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <StarIcon sx={{ color: 'warning.main', fontSize: 18 }} />
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>{apt.review.rating}/5</Typography>

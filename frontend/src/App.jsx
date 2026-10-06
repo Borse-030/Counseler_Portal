@@ -538,12 +538,13 @@ function AppContent({ themeMode, toggleTheme }) {
                 {otpSent && (
                   <TextField
                     label="OTP Verification Code"
-                    placeholder="Enter 123456"
+                    placeholder="Enter 6-digit code"
                     fullWidth
                     margin="normal"
                     required
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    inputProps={{ maxLength: 6, inputMode: 'numeric' }}
                     autoFocus
                   />
                 )}
@@ -714,12 +715,13 @@ function AppContent({ themeMode, toggleTheme }) {
               {otpSent && (
                 <TextField
                   label="OTP Verification Code"
-                  placeholder="Enter 123456"
+                  placeholder="Enter 6-digit code"
                   fullWidth
                   margin="normal"
                   required
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputProps={{ maxLength: 6, inputMode: 'numeric' }}
                   autoFocus
                   sx={{ mt: 2 }}
                 />

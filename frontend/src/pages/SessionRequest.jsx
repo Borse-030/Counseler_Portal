@@ -45,15 +45,13 @@ export default function SessionRequest({ currentUser, onAuthRedirect }) {
       setSubmitting(true);
       setError('');
       const result = await api.requestAppointment({
-        counselorId: null,
-        status: 'requested',
-        date: form.date,
-        time: form.preferredTime,
-        appointmentType: form.appointmentType,
+        preferredDate: form.date,
+        preferredTime: form.preferredTime,
+        preferredFormat: form.appointmentType,
         intakeNotes: form.intakeNotes.trim(),
       });
-      const appointment = result?.appointment || result;
-      setRequestReference(appointment?.id || appointment?._id || 'Request received');
+      const careRequest = result?.request || result;
+      setRequestReference(careRequest?.id || careRequest?._id || 'Request received');
     } catch (requestError) {
       setError(requestError.message || 'We could not submit your request. Please try again.');
     } finally {

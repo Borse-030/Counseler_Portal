@@ -1,6 +1,7 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 let authToken = localStorage.getItem('token') || null;
+let refreshToken = localStorage.getItem('refreshToken') || null;
 
 const request = async (endpoint, options = {}) => {
   const url = `${BASE_URL}${endpoint}`;
@@ -34,8 +35,19 @@ export const api = {
       localStorage.removeItem('token');
     }
   },
+
+  setRefreshToken: (token) => {
+    refreshToken = token;
+    if (token) {
+      localStorage.setItem('refreshToken', token);
+    } else {
+      localStorage.removeItem('refreshToken');
+    }
+  },
   
   getToken: () => authToken,
+
+  getRefreshToken: () => refreshToken,
   
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
@@ -57,6 +69,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
     api.setToken(data.token);
+    api.setRefreshToken(data.refreshToken);
     api.setCurrentUser(data.user);
     return data;
   },
@@ -67,12 +80,14 @@ export const api = {
       body: JSON.stringify(userData),
     });
     api.setToken(data.token);
+    api.setRefreshToken(data.refreshToken);
     api.setCurrentUser(data.user);
     return data;
   },
 
   logout: () => {
     api.setToken(null);
+    api.setRefreshToken(null);
     api.setCurrentUser(null);
   },
 
@@ -89,7 +104,18 @@ export const api = {
       body: JSON.stringify({ mobile, otp }),
     });
     api.setToken(data.token);
+    api.setRefreshToken(data.refreshToken);
     api.setCurrentUser(data.user);
+    return data;
+  },
+
+  refreshSession: async () => {
+    const data = await request('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    });
+    api.setToken(data.token);
+    api.setRefreshToken(data.refreshToken);
     return data;
   },
 
@@ -145,11 +171,45 @@ export const api = {
   },
 
   requestAppointment: async (requestData) => {
-    return request('/appointments', {
+    return request('/session-requests', {
       method: 'POST',
       body: JSON.stringify(requestData),
     });
   },
+
+  getSessionRequests: async () => request('/session-requests'),
+
+  assignSessionRequest: async (id, assignment) => request(`/session-requests/${id}/assign`, {
+    method: 'POST',
+    body: JSON.stringify(assignment),
+  }),
+
+  decideSessionRequest: async (id, decision) => request(`/session-requests/${id}/decision`, {
+    method: 'POST',
+    body: JSON.stringify(decision),
+  }),
+
+  saveDiscoveryNotes: async (id, notes) => request(`/session-requests/${id}/discovery-notes`, {
+    method: 'PUT',
+    body: JSON.stringify({ notes }),
+  }),
+
+  assignFinalCounselor: async (id, assignment) => request(`/session-requests/${id}/final-assignment`, {
+    method: 'POST',
+    body: JSON.stringify(assignment),
+  }),
+
+  scheduleDiscoveryCall: async (id, schedule) => request(`/session-requests/${id}/discovery-call`, {
+    method: 'POST',
+    body: JSON.stringify(schedule),
+  }),
+
+  scheduleRequestSession: async (id, schedule) => request(`/session-requests/${id}/sessions`, {
+    method: 'POST',
+    body: JSON.stringify(schedule),
+  }),
+
+  closeSessionRequest: async (id) => request(`/session-requests/${id}/close`, { method: 'POST' }),
 
   updateAppointment: async (id, updateData) => {
     return request(`/appointments/${id}`, {

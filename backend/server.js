@@ -1,12 +1,20 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 if (!globalThis.crypto) { globalThis.crypto = crypto.webcrypto || crypto; }
 import express from 'express';
 import cors from 'cors';
-import { db } from './db.js';
+import { db, User } from './db.js';
+import { getUserIdFromToken } from './utils/security.js';
 import authRoutes from './routes/auth.js';
 import counselorRoutes from './routes/counselors.js';
 import appointmentRoutes from './routes/appointments.js';
+import sessionRequestRoutes from './routes/sessionRequests.js';
 import adminRoutes from './routes/admin.js';
 import notificationsRoutes from './routes/notifications.js';
 
@@ -23,20 +31,19 @@ app.use(cors({
 app.use(express.json());
 
 // Logger middleware
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
 // Suspension checker middleware
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
-      const userId = Buffer.from(token, 'base64').toString('ascii');
-      const users = db.get('users');
-      const user = users.find(u => u.id === userId);
+      const userId = getUserIdFromToken(token);
+      const user = await User.findOne({ id: userId });
       if (user && user.suspended) {
         return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
       }
@@ -51,6 +58,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/counselors', counselorRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/session-requests', sessionRequestRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationsRoutes);
 

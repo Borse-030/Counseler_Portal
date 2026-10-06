@@ -33,14 +33,23 @@ const DAYS = [
   { value: 6, label: 'Saturday' }
 ];
 
+const getTomorrowDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
 export default function CounselorDashboard({ currentUser }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
+  const [careRequests, setCareRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Tabs Control
   const [activeTab, setActiveTab] = useState(0);
+  const [requestTab, setRequestTab] = useState(0);
+  const [counselors, setCounselors] = useState([]);
 
   // Availability form state
   const [workingDays, setWorkingDays] = useState([]);
@@ -70,6 +79,22 @@ export default function CounselorDashboard({ currentUser }) {
   const [selectedApt, setSelectedApt] = useState(null);
   const [sessionNotes, setSessionNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
+  const [decisionRequest, setDecisionRequest] = useState(null);
+  const [decisionReason, setDecisionReason] = useState('');
+  const [decisionLoading, setDecisionLoading] = useState(false);
+  const [scheduleRequest, setScheduleRequest] = useState(null);
+  const [scheduleKind, setScheduleKind] = useState('discovery');
+  const [scheduleDate, setScheduleDate] = useState(getTomorrowDate());
+  const [scheduleSlots, setScheduleSlots] = useState([]);
+  const [selectedScheduleTime, setSelectedScheduleTime] = useState('');
+  const [scheduleSlotsLoading, setScheduleSlotsLoading] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [discoveryNotesDrafts, setDiscoveryNotesDrafts] = useState({});
+  const [discoveryNotesSaving, setDiscoveryNotesSaving] = useState('');
+  const [finalAssignmentRequest, setFinalAssignmentRequest] = useState(null);
+  const [finalCounselorId, setFinalCounselorId] = useState('');
+  const [finalAssignmentReason, setFinalAssignmentReason] = useState('');
+  const [finalAssignmentLoading, setFinalAssignmentLoading] = useState(false);
 
   const fetchCounselorData = useCallback(async () => {
     try {
@@ -78,8 +103,14 @@ export default function CounselorDashboard({ currentUser }) {
       setConfigError('');
 
       // Fetch appointments
-      const apts = await api.getAppointments();
+      const [apts, requests, availableCounselors] = await Promise.all([
+        api.getAppointments(),
+        api.getSessionRequests(),
+        api.getCounselors(),
+      ]);
       setAppointments(apts);
+      setCareRequests(requests);
+      setCounselors(availableCounselors);
 
       // Fetch availability configurations
       const avail = await api.getCounselorAvailability(currentUser.id);
@@ -117,6 +148,29 @@ export default function CounselorDashboard({ currentUser }) {
       setLoading(false);
     }
   }, [currentUser.id]);
+
+  useEffect(() => {
+    if (!scheduleRequest || !scheduleDate) return undefined;
+    let isCurrent = true;
+    Promise.resolve().then(async () => {
+      try {
+        setScheduleSlotsLoading(true);
+        setSelectedScheduleTime('');
+        const result = await api.getCounselorSlots(currentUser.id, scheduleDate);
+        if (isCurrent) setScheduleSlots(result.slots || []);
+      } catch (error) {
+        if (isCurrent) {
+          setScheduleSlots([]);
+          setSnackbarMsg(error.message || 'Could not load counselor availability.');
+          setSnackbarSeverity('error');
+          setSnackbarOpen(true);
+        }
+      } finally {
+        if (isCurrent) setScheduleSlotsLoading(false);
+      }
+    });
+    return () => { isCurrent = false; };
+  }, [scheduleRequest, scheduleDate, currentUser.id]);
 
   useEffect(() => {
     if (currentUser) {
@@ -305,6 +359,10 @@ export default function CounselorDashboard({ currentUser }) {
       setAppointments((prev) =>
         prev.map((a) => a.id === aptId ? { ...a, status: newStatus } : a)
       );
+      const updatedAppointment = appointments.find((appointment) => appointment.id === aptId);
+      if (newStatus === 'completed' && updatedAppointment?.appointmentKind === 'discovery') {
+        setCareRequests(await api.getSessionRequests());
+      }
     } catch (err) {
       setSnackbarMsg(err.message || 'Failed to update session status.');
       setSnackbarSeverity('error');
@@ -312,9 +370,127 @@ export default function CounselorDashboard({ currentUser }) {
     }
   };
 
+  const handleAcceptCareRequest = async (careRequest) => {
+    try {
+      const result = await api.decideSessionRequest(careRequest.id, { decision: 'accepted' });
+      setCareRequests((previous) => previous.map((request) => request.id === careRequest.id ? result.request : request));
+      setSnackbarMsg('Request accepted. Schedule a discovery call with the patient.');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    } catch (error) {
+      setSnackbarMsg(error.message || 'Could not accept this request.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
+  };
+
+  const handleRejectCareRequest = async () => {
+    if (!decisionRequest || !decisionReason.trim()) return;
+    try {
+      setDecisionLoading(true);
+      const result = await api.decideSessionRequest(decisionRequest.id, { decision: 'rejected', reason: decisionReason.trim() });
+      setCareRequests((previous) => previous.map((request) => request.id === decisionRequest.id ? result.request : request));
+      setDecisionRequest(null);
+      setDecisionReason('');
+      setSnackbarMsg('Request returned to the care team for reassignment.');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    } catch (error) {
+      setSnackbarMsg(error.message || 'Could not return this request.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    } finally {
+      setDecisionLoading(false);
+    }
+  };
+
+  const handleOpenRequestSchedule = (careRequest, kind) => {
+    setScheduleRequest(careRequest);
+    setScheduleKind(kind);
+    setScheduleDate(careRequest.preferredDate || getTomorrowDate());
+    setSelectedScheduleTime('');
+  };
+
+  const handleScheduleRequestAppointment = async () => {
+    if (!scheduleRequest || !selectedScheduleTime) return;
+    try {
+      setScheduleLoading(true);
+      const schedule = {
+        date: scheduleDate,
+        time: selectedScheduleTime,
+        appointmentType: scheduleRequest.preferredFormat || 'Video Consultation',
+      };
+      const result = scheduleKind === 'discovery'
+        ? await api.scheduleDiscoveryCall(scheduleRequest.id, schedule)
+        : await api.scheduleRequestSession(scheduleRequest.id, schedule);
+      setCareRequests((previous) => previous.map((request) => request.id === scheduleRequest.id ? result.request : request));
+      setAppointments((previous) => [...previous, result.appointment]);
+      setScheduleRequest(null);
+      setSnackbarMsg(scheduleKind === 'discovery' ? 'Discovery call scheduled.' : 'Counseling session scheduled.');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    } catch (error) {
+      setSnackbarMsg(error.message || 'Could not schedule this appointment.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleSaveDiscoveryNotes = async (careRequest) => {
+    const notes = discoveryNotesDrafts[careRequest.id] ?? careRequest.discoveryNotes ?? '';
+    try {
+      setDiscoveryNotesSaving(careRequest.id);
+      const result = await api.saveDiscoveryNotes(careRequest.id, notes);
+      setCareRequests((previous) => previous.map((request) => request.id === careRequest.id ? result.request : request));
+      setSnackbarMsg('Discovery call notes saved.');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    } catch (error) {
+      setSnackbarMsg(error.message || 'Could not save discovery notes.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    } finally {
+      setDiscoveryNotesSaving('');
+    }
+  };
+
+  const handleAssignFinalCounselor = async () => {
+    if (!finalAssignmentRequest || !finalCounselorId) return;
+    try {
+      setFinalAssignmentLoading(true);
+      const result = await api.assignFinalCounselor(finalAssignmentRequest.id, {
+        counselorId: finalCounselorId,
+        reason: finalAssignmentReason,
+      });
+      setCareRequests((previous) => previous.map((request) => request.id === finalAssignmentRequest.id ? result.request : request));
+      setFinalAssignmentRequest(null);
+      setFinalCounselorId('');
+      setFinalAssignmentReason('');
+      setSnackbarMsg(`Ongoing care assigned to ${result.request.finalCounselorName}.`);
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    } catch (error) {
+      setSnackbarMsg(error.message || 'Could not assign ongoing care.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    } finally {
+      setFinalAssignmentLoading(false);
+    }
+  };
+
   // Calculations
   const upcomingSessions = appointments.filter(a => a.status === 'upcoming');
   const pastSessions = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
+  const pendingReviewRequests = careRequests.filter((request) => request.assignedCounselorId === currentUser.id && request.status === 'assigned');
+  const approvedRequests = careRequests.filter((request) => ['accepted', 'discovery_scheduled', 'discovery_completed', 'active'].includes(request.status));
+  const declinedRequests = careRequests.filter((request) => request.assignedCounselorId === currentUser.id && request.status === 'rejected');
+  const visibleCareRequests = requestTab === 0
+    ? pendingReviewRequests
+    : requestTab === 1
+      ? approvedRequests
+      : declinedRequests;
   const totalEarnings = appointments
     .filter(a => a.status === 'completed')
     .reduce((sum, current) => sum + current.amount, 0);
@@ -440,16 +616,175 @@ export default function CounselorDashboard({ currentUser }) {
       {/* Tabs Layout */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
         <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)}>
-          <Tab label="Appointments Log" sx={{ fontWeight: 600, fontSize: '1rem' }} />
+          <Tab label="Patient Workspace" sx={{ fontWeight: 600, fontSize: '1rem' }} />
           <Tab label="Set Availability" sx={{ fontWeight: 600, fontSize: '1rem' }} />
         </Tabs>
       </Box>
 
       {/* TAB 0: APPOINTMENTS LOG */}
       {activeTab === 0 && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Grid container spacing={3} sx={{ alignItems: 'flex-start' }}>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <Card sx={{ position: { md: 'sticky' }, top: { md: 88 } }}>
+              <CardContent>
+                <Typography variant="overline" color="primary" sx={{ fontWeight: 700 }}>COUNSELOR WORKSPACE</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Patient management</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                  <Button fullWidth variant={requestTab === 0 ? 'contained' : 'text'} sx={{ justifyContent: 'space-between' }} onClick={() => { setRequestTab(0); document.getElementById('care-requests')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                    Pending review <Chip size="small" label={pendingReviewRequests.length} />
+                  </Button>
+                  <Button fullWidth variant={requestTab === 1 ? 'contained' : 'text'} sx={{ justifyContent: 'space-between' }} onClick={() => { setRequestTab(1); document.getElementById('care-requests')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                    Approved patients <Chip size="small" label={approvedRequests.length} />
+                  </Button>
+                  <Button fullWidth variant={requestTab === 2 ? 'contained' : 'text'} sx={{ justifyContent: 'space-between' }} onClick={() => { setRequestTab(2); document.getElementById('care-requests')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                    Declined <Chip size="small" label={declinedRequests.length} />
+                  </Button>
+                  <Divider sx={{ my: 1 }} />
+                  <Button fullWidth variant="text" sx={{ justifyContent: 'flex-start' }} onClick={() => document.getElementById('upcoming-sessions')?.scrollIntoView({ behavior: 'smooth' })}>
+                    Upcoming sessions
+                  </Button>
+                  <Button fullWidth variant="text" sx={{ justifyContent: 'flex-start' }} onClick={() => document.getElementById('past-consultations')?.scrollIntoView({ behavior: 'smooth' })}>
+                    Past consultations
+                  </Button>
+                  <Button fullWidth variant="text" startIcon={<SettingsIcon />} sx={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab(1)}>
+                    Availability
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 9 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Box id="care-requests" sx={{ scrollMarginTop: 96 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+              <Box id="care-requests" sx={{ scrollMarginTop: 96 }}>
+                <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Assigned care requests</Typography>
+                <Typography variant="body2" color="text.secondary">Review patient intake, respond, then schedule discovery and follow-up sessions.</Typography>
+              </Box>
+              <Chip label={`${pendingReviewRequests.length} to review`} size="small" color={pendingReviewRequests.length ? 'warning' : 'default'} />
+            </Box>
+            <Tabs value={requestTab} onChange={(event, value) => setRequestTab(value)} sx={{ mb: 2 }}>
+              <Tab label={`Pending review ${pendingReviewRequests.length}`} />
+              <Tab label={`Approved patients ${approvedRequests.length}`} />
+              <Tab label={`Declined ${declinedRequests.length}`} />
+            </Tabs>
+            {visibleCareRequests.length === 0 ? (
+              <Paper sx={{ p: 2.5, border: 1, borderColor: 'divider' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  {requestTab === 0 ? 'No requests waiting for your review' : requestTab === 1 ? 'No approved patients yet' : 'No declined requests'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {requestTab === 0 ? 'The admin team will assign patients based on expertise and availability.' : 'Requests will appear here as you review assigned patients.'}
+                </Typography>
+              </Paper>
+            ) : (
+              <Grid container spacing={2}>
+                {visibleCareRequests.map((careRequest) => {
+                  const relatedAppointments = appointments.filter((appointment) => appointment.careRequestId === careRequest.id);
+                  return (
+                    <Grid size={{ xs: 12, lg: 6 }} key={careRequest.id}>
+                      <Card sx={{ height: '100%' }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
+                            <Box id="upcoming-sessions" sx={{ scrollMarginTop: 96 }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{careRequest.patientName}</Typography>
+                              <Typography variant="caption" color="text.secondary">Request {careRequest.id}</Typography>
+                            </Box>
+                            <Chip label={careRequest.status.replaceAll('_', ' ')} size="small" color={careRequest.status === 'rejected' ? 'error' : 'warning'} />
+                          </Box>
+                          <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                            <Grid size={{ xs: 6 }}>
+                              <Typography variant="caption" color="text.secondary">PREFERRED DATE</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{careRequest.preferredDate}</Typography>
+                            </Grid>
+                            <Grid size={{ xs: 6 }}>
+                              <Typography variant="caption" color="text.secondary">TIME / FORMAT</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{careRequest.preferredTime} · {careRequest.preferredFormat}</Typography>
+                            </Grid>
+                          </Grid>
+                          <Typography variant="caption" color="text.secondary">PATIENT INTAKE</Typography>
+                          <Typography variant="body2" sx={{ minHeight: 40, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mb: 2 }}>
+                            {careRequest.intakeNotes || 'No additional intake notes.'}
+                          </Typography>
+
+                          {relatedAppointments.length > 0 && (
+                            <Box sx={{ mb: 2, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                              <Typography variant="caption" color="text.secondary">LINKED APPOINTMENTS</Typography>
+                              {relatedAppointments.map((appointment) => (
+                                <Typography key={appointment.id} variant="body2">
+                                  {appointment.appointmentKind === 'discovery' ? 'Discovery call' : 'Session'} · {appointment.date} · {appointment.time} · {appointment.status}
+                                </Typography>
+                              ))}
+                            </Box>
+                          )}
+
+                          {careRequest.status === 'assigned' && careRequest.assignedCounselorId === currentUser.id && (
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                              <Button size="small" variant="contained" onClick={() => handleAcceptCareRequest(careRequest)}>Accept request</Button>
+                              <Button size="small" color="error" variant="outlined" onClick={() => { setDecisionRequest(careRequest); setDecisionReason(''); }}>Return to admin</Button>
+                            </Box>
+                          )}
+                          {careRequest.status === 'accepted' && careRequest.assignedCounselorId === currentUser.id && (
+                            <Button size="small" variant="contained" onClick={() => handleOpenRequestSchedule(careRequest, 'discovery')}>Schedule discovery call</Button>
+                          )}
+                          {['discovery_scheduled', 'discovery_completed'].includes(careRequest.status) && (
+                            <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                              <Typography variant="caption" color="text.secondary">DISCOVERY CALL NOTES</Typography>
+                              <TextField
+                                fullWidth
+                                multiline
+                                minRows={3}
+                                size="small"
+                                sx={{ mt: 0.75, mb: 1 }}
+                                placeholder="Record the patient's needs, goals, and recommended next steps."
+                                value={discoveryNotesDrafts[careRequest.id] ?? careRequest.discoveryNotes ?? ''}
+                                disabled={careRequest.assignedCounselorId !== currentUser.id}
+                                onChange={(event) => setDiscoveryNotesDrafts((previous) => ({ ...previous, [careRequest.id]: event.target.value }))}
+                              />
+                              {careRequest.assignedCounselorId === currentUser.id && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => handleSaveDiscoveryNotes(careRequest)}
+                                  disabled={discoveryNotesSaving === careRequest.id}
+                                >
+                                  {discoveryNotesSaving === careRequest.id ? <CircularProgress size={18} /> : 'Save discovery notes'}
+                                </Button>
+                              )}
+                            </Box>
+                          )}
+                          {careRequest.status === 'discovery_completed' && careRequest.assignedCounselorId === currentUser.id && (
+                            <Box sx={{ mt: 1.5 }}>
+                              {careRequest.finalCounselorId ? (
+                                <Chip label={`Ongoing care: ${careRequest.finalCounselorName}`} color="success" size="small" />
+                              ) : (
+                                <Button size="small" variant="contained" onClick={() => { setFinalAssignmentRequest(careRequest); setFinalCounselorId(currentUser.id); setFinalAssignmentReason(''); }}>
+                                  Assign ongoing counselor
+                                </Button>
+                              )}
+                            </Box>
+                          )}
+                          {['discovery_completed', 'active'].includes(careRequest.status) && careRequest.finalCounselorId === currentUser.id && (
+                            <Box sx={{ mt: 1.5 }}>
+                              {careRequest.finalCounselorId && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>Assigned for ongoing care</Typography>}
+                              <Button size="small" variant="contained" onClick={() => handleOpenRequestSchedule(careRequest, 'session')}>Schedule follow-up session</Button>
+                            </Box>
+                          )}
+                          {careRequest.status === 'rejected' && (
+                            <Alert severity="info" sx={{ mt: 1.5 }}>{careRequest.rejectedReason || 'Returned to admin for reassignment.'}</Alert>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            )}
+          </Box>
+
           {/* Upcoming Appointments */}
-          <Box>
+          <Box id="upcoming-sessions" sx={{ scrollMarginTop: 96 }}>
             <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
               Upcoming Sessions
             </Typography>
@@ -535,7 +870,7 @@ export default function CounselorDashboard({ currentUser }) {
           </Box>
 
           {/* Past Appointments History */}
-          <Box>
+          <Box id="past-consultations" sx={{ scrollMarginTop: 96 }}>
             <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
               Historical Consultations
             </Typography>
@@ -593,6 +928,8 @@ export default function CounselorDashboard({ currentUser }) {
             )}
           </Box>
         </Box>
+          </Grid>
+        </Grid>
       )}
 
       {/* TAB 1: SET AVAILABILITY */}
@@ -765,7 +1102,7 @@ export default function CounselorDashboard({ currentUser }) {
               </Typography>
               
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box>
+                <Box id="past-consultations" sx={{ scrollMarginTop: 96 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
                     SESSION LENGTH
                   </Typography>
@@ -819,6 +1156,112 @@ export default function CounselorDashboard({ currentUser }) {
       )}
 
       {/* TAB 2: EARNINGS ANALYTICS - HIDDEN FOR NGO */}
+
+      <Dialog open={Boolean(decisionRequest)} onClose={() => !decisionLoading && setDecisionRequest(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Return request to admin</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            The care team will use your note to reassign this patient to another counselor.
+          </Typography>
+          <TextField
+            fullWidth
+            required
+            multiline
+            minRows={3}
+            label="Reason for reassignment"
+            value={decisionReason}
+            onChange={(event) => setDecisionReason(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setDecisionRequest(null)} disabled={decisionLoading}>Keep request</Button>
+          <Button color="error" variant="contained" onClick={handleRejectCareRequest} disabled={decisionLoading || !decisionReason.trim()}>
+            {decisionLoading ? <CircularProgress size={22} /> : 'Return to admin'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(scheduleRequest)} onClose={() => !scheduleLoading && setScheduleRequest(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
+          {scheduleKind === 'discovery' ? 'Schedule discovery call' : 'Schedule follow-up session'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Choose an available time from your published schedule for {scheduleRequest?.patientName}.
+          </Typography>
+          <TextField
+            fullWidth
+            type="date"
+            label="Date"
+            value={scheduleDate}
+            onChange={(event) => setScheduleDate(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: getTomorrowDate() } }}
+            sx={{ mb: 2 }}
+          />
+          {scheduleSlotsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={28} /></Box>
+          ) : scheduleSlots.filter((slot) => slot.available).length === 0 ? (
+            <Alert severity="info">No available times on this date. Choose another date or update your availability.</Alert>
+          ) : (
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 1 }}>
+              {scheduleSlots.filter((slot) => slot.available).map((slot) => (
+                <Button
+                  key={slot.time}
+                  size="small"
+                  variant={selectedScheduleTime === slot.time ? 'contained' : 'outlined'}
+                  onClick={() => setSelectedScheduleTime(slot.time)}
+                >
+                  {slot.time}
+                </Button>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setScheduleRequest(null)} disabled={scheduleLoading}>Cancel</Button>
+          <Button variant="contained" onClick={handleScheduleRequestAppointment} disabled={scheduleLoading || !selectedScheduleTime}>
+            {scheduleLoading ? <CircularProgress size={22} /> : scheduleKind === 'discovery' ? 'Confirm discovery call' : 'Schedule session'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(finalAssignmentRequest)} onClose={() => !finalAssignmentLoading && setFinalAssignmentRequest(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Assign ongoing care</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Choose yourself or another approved counselor whose specialty best fits the discovery-call notes.
+          </Typography>
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel id="final-counselor-label">Ongoing counselor</InputLabel>
+            <Select
+              labelId="final-counselor-label"
+              label="Ongoing counselor"
+              value={finalCounselorId}
+              onChange={(event) => setFinalCounselorId(event.target.value)}
+            >
+              {counselors.map((counselor) => (
+                <MenuItem key={counselor.id} value={counselor.id}>
+                  {counselor.name} · {counselor.specialty || 'General counseling'}{counselor.id === currentUser.id ? ' · You' : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            fullWidth
+            multiline
+            minRows={2}
+            label="Assignment rationale (optional)"
+            value={finalAssignmentReason}
+            onChange={(event) => setFinalAssignmentReason(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setFinalAssignmentRequest(null)} disabled={finalAssignmentLoading}>Cancel</Button>
+          <Button variant="contained" onClick={handleAssignFinalCounselor} disabled={finalAssignmentLoading || !finalCounselorId}>
+            {finalAssignmentLoading ? <CircularProgress size={22} /> : 'Confirm care assignment'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* CLINICAL SESSION NOTES MODAL */}
       <Dialog open={notesOpen} onClose={() => setNotesOpen(false)} maxWidth="sm" fullWidth>
