@@ -111,9 +111,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(userData),
     });
-    api.setToken(data.token);
-    api.setRefreshToken(data.refreshToken);
-    api.setCurrentUser(data.user);
     return data;
   },
 
@@ -182,8 +179,8 @@ export const api = {
     });
   },
 
-  getCounselorSlots: async (id, date) => {
-    return request(`/counselors/${id}/slots?date=${date}`);
+  getCounselorSlots: async (id, date, duration = 60) => {
+    return request(`/counselors/${id}/slots?date=${date}&duration=${duration}`);
   },
 
   // Appointments API
@@ -216,6 +213,10 @@ export const api = {
     body: JSON.stringify(assignment),
   }),
 
+  claimSessionRequest: async (id) => request(`/session-requests/${id}/claim`, {
+    method: 'POST',
+  }),
+
   decideSessionRequest: async (id, decision) => request(`/session-requests/${id}/decision`, {
     method: 'POST',
     body: JSON.stringify(decision),
@@ -231,14 +232,19 @@ export const api = {
     body: JSON.stringify(assignment),
   }),
 
-  scheduleDiscoveryCall: async (id, schedule) => request(`/session-requests/${id}/discovery-call`, {
+  reviewFinalAssignment: async (id, review) => request(`/session-requests/${id}/final-assignment/review`, {
     method: 'POST',
-    body: JSON.stringify(schedule),
+    body: JSON.stringify(review),
   }),
 
   scheduleRequestSession: async (id, schedule) => request(`/session-requests/${id}/sessions`, {
     method: 'POST',
     body: JSON.stringify(schedule),
+  }),
+
+  reviewRequestSession: async (id, appointmentId, review) => request(`/session-requests/${id}/sessions/${appointmentId}/review`, {
+    method: 'POST',
+    body: JSON.stringify(review),
   }),
 
   closeSessionRequest: async (id) => request(`/session-requests/${id}/close`, { method: 'POST' }),

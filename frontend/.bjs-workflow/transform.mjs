@@ -1,0 +1,32 @@
+import fs from 'node:fs';
+const root = '.bjs-workflow/backend/';
+const edit = (file, change) => fs.writeFileSync(root + file, change(fs.readFileSync(root + file, 'utf8').replaceAll('\r\n', '\n')));
+edit('controllers/sessionRequestController.js', s => {
+  const start = s.indexOf('const validateSchedule =');
+  const end = s.indexOf('const createAppointmentForRequest', start);
+  s = s.slice(0, start) + s.slice(end);
+  s = `import { validateSchedule, overlaps, validMeetingLink } from '../utils/scheduling.js';\n` + s;
+  s = s.replace("const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind })", "const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind, meetingLink = '' })");
+  s = s.replace("    meetingLink: '',", '    meetingLink,');
+  const decisionStart = s.indexOf('export const handleDecision');
+  const decisionEnd = s.indexOf('export const updateDiscoveryNotes', decisionStart);
+  s = s.slice(0, decisionStart) + fs.readFileSync('.bjs-workflow/decision.txt', 'utf8') + '\n' + s.slice(decisionEnd);
+  s = s.replace("if (!['discovery_scheduled', 'discovery_completed'].includes(careRequest.status))", "if (!['discovery_scheduled', 'discovery_completed', 'active'].includes(careRequest.status))");
+  s = s.replace("if (careRequest.status !== 'discovery_completed' || !careRequest.discoveryNotes.trim())", "if (!['discovery_scheduled', 'discovery_completed', 'active'].includes(careRequest.status) || !careRequest.discoveryNotes.trim())");
+  s = s.replace('Complete the discovery call and record its notes before assigning ongoing care.', 'Schedule the discovery call and save discovery notes before assigning ongoing care.');
+  s = s.replace("addTimeline(careRequest, 'discovery_completed', req.user, `Ongoing care assigned", "addTimeline(careRequest, careRequest.status, req.user, `Ongoing care assigned");
+  s = s.replace('Your discovery call is complete. Ongoing care has been assigned', 'Ongoing care has been assigned');
+  s = s.replace("const { date, time, appointmentType = 'Discovery Call' } = req.body;", "const { date, time, appointmentType = 'Audio Consultation', meetingLink = '' } = req.body;\n  if (!validMeetingLink(meetingLink)) return res.status(400).json({ message: 'Use a valid HTTPS meeting link.' });");
+  s = s.replace('validateSchedule(careRequest.assignedCounselorId, date, time)', "validateSchedule(careRequest.assignedCounselorId, date, time, 20, '', careRequest.patientId)");
+  s = s.replace("{ date, time, appointmentType, kind: 'discovery' }", "{ date, time, appointmentType, meetingLink, kind: 'discovery' }");
+  const sessionStart = s.indexOf('export const scheduleSession');
+  const sessionEnd = s.indexOf('export const closeCase', sessionStart);
+  s = s.slice(0, sessionStart) + fs.readFileSync('.bjs-workflow/sessions.txt', 'utf8') + '\n' + s.slice(sessionEnd);
+  s = s.replace("appointment.appointmentKind === 'session'", "['session', 'follow_up'].includes(appointment.appointmentKind)");
+  s = s.replace("appointment.status === 'upcoming'))", "['upcoming', 'pending_admin'].includes(appointment.status)))");
+  s = s.replace('This case still has scheduled counseling sessions.', 'This case still has scheduled sessions or sessions awaiting admin review.');
+  // Allow an active counselor to review an unassigned registration (e.g. no staff at signup).
+  s = s.replace("request.finalCounselorId === user.id))", "request.finalCounselorId === user.id || (request.status === 'submitted' && !request.assignedCounselorId)))");
+  s = s.replace("{ finalCounselorId: req.user.id }]", "{ finalCounselorId: req.user.id }, { status: 'submitted', assignedCounselorId: '' }]");
+  return s;
+});

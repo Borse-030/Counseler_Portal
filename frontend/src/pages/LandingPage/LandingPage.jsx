@@ -843,7 +843,7 @@ const LandingPage = () => {
 								justifyContent:{xs:"center", sm:"left"},
 								}}
 							>
-								MindEase
+								BJS
 							</Typography>
 
 							<Typography

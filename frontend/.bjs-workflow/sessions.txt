@@ -1,0 +1,77 @@
+export const scheduleSession = async (req, res) => {
+  if (!['admin', 'counselor'].includes(req.user.role)) return res.status(403).json({ message: 'Staff access required.' });
+  const sessions = req.body.sessions || [req.body];
+  if (!Array.isArray(sessions) || sessions.length < 1 || sessions.length > 12) return res.status(400).json({ message: 'Propose between 1 and 12 sessions at a time.' });
+  try {
+    const careRequest = await CareRequest.findOne({ id: req.params.id });
+    if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
+    if (!careRequest.finalCounselorId || !['discovery_scheduled', 'discovery_completed', 'active'].includes(careRequest.status)) {
+      return res.status(409).json({ message: 'Start discovery, save notes, and assign ongoing care before proposing sessions.' });
+    }
+    if (req.user.role === 'counselor' && ![careRequest.assignedCounselorId, careRequest.finalCounselorId].includes(req.user.id)) {
+      return res.status(403).json({ message: 'Only an assigned counselor can propose sessions.' });
+    }
+    const counselor = await User.findOne({ id: careRequest.finalCounselorId, role: 'counselor', approved: true, suspended: { $ne: true } });
+    if (!counselor) return res.status(409).json({ message: 'Choose an active ongoing counselor.' });
+    const batchId = `plan_${crypto.randomUUID()}`;
+    const proposals = [];
+    const limits = await BookingLimit.findOne({ counselorId: counselor.id }) || { maxAppointmentsPerDay: 5 };
+    for (const session of sessions) {
+      const { date, time, duration = 60, appointmentType = 'Video Consultation', kind = 'session', meetingLink = '', purpose = '' } = session || {};
+      if (!['session', 'follow_up'].includes(kind) || !['Video Consultation', 'Audio Consultation', 'In-Person Consultation'].includes(appointmentType) ||
+          !validMeetingLink(meetingLink) || typeof purpose !== 'string' || purpose.length > 2000) {
+        return res.status(400).json({ message: 'Choose a valid session type, HTTPS meeting link, and purpose (up to 2,000 characters).' });
+      }
+      const scheduleError = await validateSchedule(counselor.id, date, time, duration, '', careRequest.patientId);
+      if (scheduleError) return res.status(400).json({ message: `${date || 'Session'}: ${scheduleError}` });
+      if (proposals.some(other => overlaps({ date, time, duration }, other))) return res.status(400).json({ message: 'The proposed sessions overlap each other.' });
+      const reserved = await Appointment.countDocuments({ counselorId: counselor.id, date, status: { $in: ['pending_admin', 'upcoming', 'completed'] } });
+      if (reserved + proposals.filter(item => item.date === date).length >= limits.maxAppointmentsPerDay) return res.status(400).json({ message: `${date}: The proposal exceeds the daily appointment limit.` });
+      proposals.push({ id: appointmentId(), careRequestId: careRequest.id, appointmentKind: kind,
+        proposalBatchId: batchId, proposedById: req.user.id, proposedByName: req.user.name,
+        patientId: careRequest.patientId, patientName: careRequest.patientName,
+        counselorId: counselor.id, counselorName: counselor.name, counselorSpecialty: counselor.specialty,
+        date, time, duration, appointmentType, meetingLink, purpose: purpose.trim(),
+        status: 'pending_admin', amount: 0, intakeNotes: careRequest.intakeNotes, review: null });
+    }
+    const appointments = await Appointment.insertMany(proposals);
+    careRequest.appointmentIds.push(...appointments.map(item => item.id));
+    addTimeline(careRequest, careRequest.status, req.user, `${appointments.length} session(s) proposed for admin review.`);
+    await careRequest.save();
+    const admins = await User.find({ role: 'admin', suspended: { $ne: true } });
+    await Promise.all(admins.map(admin => sendNotification(admin.id, `${req.user.name} proposed ${appointments.length} session(s) for ${careRequest.patientName}. Admin review required.`)));
+    await sendNotification(careRequest.patientId, 'Your proposed BJS sessions are awaiting admin review. They are not confirmed yet.');
+    res.status(201).json({ message: 'Sessions sent for admin review.', appointments, request: careRequest });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};
+
+export const reviewSession = async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Only admins can review session proposals.' });
+  const { decision, reason = '' } = req.body;
+  if (!['approved', 'rejected'].includes(decision) || typeof reason !== 'string' || reason.length > 1000 || (decision === 'rejected' && !reason.trim())) {
+    return res.status(400).json({ message: 'Choose approve or reject and provide a reason for rejection (up to 1,000 characters).' });
+  }
+  try {
+    const appointment = await Appointment.findOne({ id: req.params.appointmentId, careRequestId: req.params.id });
+    const careRequest = await CareRequest.findOne({ id: req.params.id });
+    if (!appointment || !careRequest) return res.status(404).json({ message: 'Session proposal not found.' });
+    if (appointment.status !== 'pending_admin') return res.status(409).json({ message: 'This session has already been reviewed.' });
+    if (decision === 'approved') {
+      if (!['discovery_scheduled', 'discovery_completed', 'active'].includes(careRequest.status)) return res.status(409).json({ message: 'The care case is not ready for sessions.' });
+      const error = await validateSchedule(appointment.counselorId, appointment.date, appointment.time, appointment.duration, appointment.id, appointment.patientId);
+      if (error) return res.status(409).json({ message: error });
+    }
+    const updated = await Appointment.findOneAndUpdate({ id: appointment.id, status: 'pending_admin' }, { $set: {
+      status: decision === 'approved' ? 'upcoming' : 'rejected', reviewedById: req.user.id, reviewedByName: req.user.name,
+      reviewedAt: new Date(), reviewReason: reason.trim(),
+    } }, { new: true });
+    if (!updated) return res.status(409).json({ message: 'Another admin already reviewed this session.' });
+    // Preserve discovery state until that call is completed.
+    addTimeline(careRequest, decision === 'approved' && careRequest.status === 'discovery_completed' ? 'active' : careRequest.status,
+      req.user, `Session ${appointment.date} ${appointment.time} ${decision}. ${reason.trim()}`);
+    await careRequest.save();
+    await Promise.all([appointment.patientId, appointment.counselorId, appointment.proposedById].filter((id, index, ids) => id && ids.indexOf(id) === index)
+      .map(id => sendNotification(id, `Session for ${appointment.patientName} on ${appointment.date} at ${appointment.time} IST ${decision} by admin.${reason.trim() ? ` Reason: ${reason.trim()}` : ''}`)));
+    res.json({ message: `Session ${decision}.`, appointment: updated, request: careRequest });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};

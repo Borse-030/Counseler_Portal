@@ -3,11 +3,9 @@ import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from
 import { 
   ThemeProvider, CssBaseline, AppBar, Toolbar, Typography, Button, 
   Box, IconButton, Dialog, DialogTitle, DialogContent, Alert, TextField, 
-  Tabs, Tab, CircularProgress, Tooltip, Menu, MenuItem, Avatar,
+  Tabs, Tab, CircularProgress, Menu, MenuItem, Avatar,
   Divider, Grid, FormControl, InputLabel, Select, Badge, Popover, Snackbar, Chip
 } from '@mui/material';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
 import SpaIcon from '@mui/icons-material/Spa';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -62,7 +60,7 @@ function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired })
 }
 
 // Inner App with routing logic
-function AppContent({ themeMode, toggleTheme }) {
+function AppContent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(api.getCurrentUser());
   const [notifications, setNotifications] = useState([]);
@@ -83,10 +81,6 @@ function AppContent({ themeMode, toggleTheme }) {
   const [counselingRequirements, setCounselingRequirements] = useState('');
   
   // Counselor Specific Fields
-  const [specialty, setSpecialty] = useState('');
-  const [price, setPrice] = useState('100');
-  const [bio, setBio] = useState('');
-  const [credentials, setCredentials] = useState('');
   
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -127,11 +121,11 @@ function AppContent({ themeMode, toggleTheme }) {
 
   useEffect(() => {
     if (currentUser) {
-      fetchNotifications();
+      Promise.resolve().then(fetchNotifications);
       const interval = setInterval(fetchNotifications, 10000);
       return () => clearInterval(interval);
     } else {
-      setNotifications([]);
+      Promise.resolve().then(() => setNotifications([]));
     }
   }, [currentUser, fetchNotifications]);
 
@@ -225,7 +219,6 @@ function AppContent({ themeMode, toggleTheme }) {
       setAuthError('Please enter a valid 10-digit mobile number.');
       return;
     }
-
     if (!otpSent) {
       await handleSendOtp(e);
       return;
@@ -254,8 +247,12 @@ function AppContent({ themeMode, toggleTheme }) {
         counselingRequirements
       };
       const data = await api.register(payload);
-      setCurrentUser(data.user);
       setAuthOpen(false);
+      setSnackbarMsg(data.request?.assignedCounselorId
+        ? 'Registration request received and sent to a counselor for review. You can sign in after approval.'
+        : 'Registration request received. The care team will assign a counselor; you can sign in after approval.');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
 
       // Reset form states
       setName('');
@@ -272,7 +269,7 @@ function AppContent({ themeMode, toggleTheme }) {
       setOtpSent(false);
       setOtpSuccessMsg('');
 
-      navigate('/dashboard');
+      navigate('/');
     } catch (err) {
       setAuthError(err.message || 'Registration failed.');
     } finally {
@@ -345,7 +342,7 @@ function AppContent({ themeMode, toggleTheme }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'inherit' }} component={Link} to="/">
             <SpaIcon color="primary" sx={{ fontSize: 32 }} />
             <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '-0.5px' }}>
-              MindEase
+              BJS Counseling
             </Typography>
           </Box>
 
@@ -905,15 +902,8 @@ function AppContent({ themeMode, toggleTheme }) {
 }
 
 export default function App() {
-  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('theme') || 'light');
+  const [themeMode] = useState(() => localStorage.getItem('theme') || 'light');
 
-  const toggleTheme = () => {
-    setThemeMode((prev) => {
-      const next = prev === 'light' ? 'dark' : 'light';
-      localStorage.setItem('theme', next);
-      return next;
-    });
-  };
 
   const theme = getTheme(themeMode);
 
@@ -921,7 +911,7 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <AppContent themeMode={themeMode} toggleTheme={toggleTheme} />
+        <AppContent />
       </Router>
     </ThemeProvider>
   );

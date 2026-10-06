@@ -18,10 +18,21 @@ const AssignmentHistorySchema = new mongoose.Schema({
   at: { type: Date, default: Date.now }
 }, { _id: false });
 
+const ReviewSchema = new mongoose.Schema({
+  actorId: { type: String, default: '' },
+  actorName: { type: String, default: '' },
+  actorRole: { type: String, enum: ['admin', 'counselor'], default: 'counselor' },
+  decision: { type: String, enum: ['accepted', 'rejected'], required: true },
+  reason: { type: String, default: '' },
+  at: { type: Date, default: Date.now },
+}, { _id: false });
+
 const CareRequestSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   patientId: { type: String, required: true },
   patientName: { type: String, required: true },
+  patientMobile: { type: String, default: '' },
+  preferredLanguage: { type: String, default: '' },
   status: {
     type: String,
     enum: [
@@ -31,6 +42,7 @@ const CareRequestSchema = new mongoose.Schema({
       'rejected',
       'discovery_scheduled',
       'discovery_completed',
+      'assignment_pending',
       'matched',
       'active',
       'completed',
@@ -53,6 +65,7 @@ const CareRequestSchema = new mongoose.Schema({
   discoveryNotes: { type: String, default: '' },
   appointmentIds: { type: [String], default: [] },
   assignmentHistory: { type: [AssignmentHistorySchema], default: [] },
+  reviews: { type: [ReviewSchema], default: [] },
   timeline: { type: [TimelineEntrySchema], default: [] }
 }, { timestamps: true });
 

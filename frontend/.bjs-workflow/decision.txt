@@ -1,0 +1,38 @@
+export const handleDecision = async (req, res) => {
+  const { decision, reason = '' } = req.body;
+  if (!['admin', 'counselor'].includes(req.user.role)) return res.status(403).json({ message: 'Staff access required.' });
+  if (!['accepted', 'rejected'].includes(decision)) return res.status(400).json({ message: 'Choose approve or reject.' });
+  if (typeof reason !== 'string' || reason.length > 1000 || (decision === 'rejected' && !reason.trim())) {
+    return res.status(400).json({ message: 'Rejection requires a reason, up to 1,000 characters.' });
+  }
+  try {
+    const careRequest = await CareRequest.findOne({ id: req.params.id });
+    if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
+    if (req.user.role === 'counselor' && careRequest.assignedCounselorId && careRequest.assignedCounselorId !== req.user.id) {
+      return res.status(403).json({ message: 'This registration belongs to another counselor.' });
+    }
+    if (!['submitted', 'assigned', 'accepted', 'rejected'].includes(careRequest.status)) {
+      return res.status(409).json({ message: 'Registration review is complete; discovery or ongoing care has begun.' });
+    }
+    const updates = { status: decision, rejectedReason: decision === 'rejected' ? reason.trim() : '' };
+    if (req.user.role === 'counselor' && !careRequest.assignedCounselorId) {
+      updates.assignedCounselorId = req.user.id;
+      updates.assignedCounselorName = req.user.name;
+    }
+    const request = await CareRequest.findOneAndUpdate(
+      { id: careRequest.id, status: careRequest.status, updatedAt: careRequest.updatedAt },
+      { $set: updates, $push: {
+        reviews: { actorId: req.user.id, actorName: req.user.name, actorRole: req.user.role, decision, reason: reason.trim(), at: new Date() },
+        timeline: { status: decision, actorId: req.user.id, actorName: req.user.name, note: `${req.user.role} ${decision} registration. ${reason.trim()}`, at: new Date() },
+      } }, { new: true }
+    );
+    if (!request) return res.status(409).json({ message: 'Another reviewer changed this registration. Refresh and review the latest decision.' });
+    await sendNotification(careRequest.patientId, decision === 'accepted'
+      ? 'Your BJS registration has been approved. The care team can arrange your discovery call.'
+      : `Your BJS registration was rejected. Reason: ${reason.trim()}`);
+    const admins = await User.find({ role: 'admin', suspended: { $ne: true } });
+    const recipients = new Set([...admins.map(admin => admin.id), request.assignedCounselorId].filter(Boolean));
+    await Promise.all([...recipients].filter(id => id !== req.user.id).map(id => sendNotification(id, `${req.user.name} ${decision} registration for ${careRequest.patientName}.`)));
+    res.json({ message: `Registration ${decision === 'accepted' ? 'approved' : 'rejected'}.`, request });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};

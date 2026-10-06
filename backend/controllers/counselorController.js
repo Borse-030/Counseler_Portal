@@ -326,7 +326,7 @@ export const getSlots = async (req, res) => {
     const appointments = await Appointment.find({
       counselorId,
       date: date,
-      status: { $in: ['upcoming', 'completed'] }
+      status: { $in: ['upcoming', 'pending_admin', 'completed'] }
     });
 
     if (appointments.length >= limits.maxAppointmentsPerDay) {

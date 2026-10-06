@@ -4,10 +4,12 @@ import {
   getRequests,
   getRequestById,
   assignCounselor,
+  claimRequest,
   handleDecision,
+  reviewFinalAssignment,
+  reviewRequestSession,
   updateDiscoveryNotes,
   assignFinalCounselor,
-  scheduleDiscoveryCall,
   scheduleSession,
   closeCase
 } from '../controllers/sessionRequestController.js';
@@ -37,11 +39,13 @@ router.post('/', authenticate, createRequest);
 router.get('/', authenticate, getRequests);
 router.get('/:id', authenticate, getRequestById);
 router.post('/:id/assign', authenticate, assignCounselor);
+router.post('/:id/claim', authenticate, claimRequest);
 router.post('/:id/decision', authenticate, handleDecision);
 router.put('/:id/discovery-notes', authenticate, updateDiscoveryNotes);
 router.post('/:id/final-assignment', authenticate, assignFinalCounselor);
-router.post('/:id/discovery-call', authenticate, scheduleDiscoveryCall);
+router.post('/:id/final-assignment/review', authenticate, reviewFinalAssignment);
 router.post('/:id/sessions', authenticate, scheduleSession);
+router.post('/:id/sessions/:appointmentId/review', authenticate, reviewRequestSession);
 router.post('/:id/close', authenticate, closeCase);
 
 export default router;

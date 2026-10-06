@@ -29,57 +29,6 @@ const getAppointmentDateParts = (dateValue) => {
   };
 };
 
-const createDemoAppointments = () => {
-  const dateInDays = (daysFromNow) => {
-    const date = new Date();
-    date.setDate(date.getDate() + daysFromNow);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  };
-
-  return [
-    {
-      id: 'demo-session-next',
-      status: 'upcoming',
-      counselorName: 'Dr. Ananya Sen',
-      counselorSpecialty: 'CBT Specialist',
-      date: dateInDays(3),
-      time: '4:00 PM',
-      duration: 50,
-      appointmentType: 'Online Consultation',
-      isDemo: true,
-    },
-    {
-      id: 'demo-session-following',
-      status: 'upcoming',
-      counselorName: 'Dr. Sameer Joshi',
-      counselorSpecialty: 'Clinical Psychologist',
-      date: dateInDays(8),
-      time: '11:00 AM',
-      duration: 50,
-      appointmentType: 'In-Person Consultation',
-      clinicAddress: 'MindEase Wellness Center, Pune',
-      isDemo: true,
-    },
-  ];
-};
-
-const createDemoSessionRequests = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 10);
-  return [{
-    id: 'demo-request-pending',
-    status: 'submitted',
-    patientName: 'You',
-    preferredDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
-    preferredTime: 'Afternoon',
-    preferredFormat: 'Online Consultation',
-    intakeNotes: 'Support with stress and sleep.',
-    assignedCounselorName: '',
-    rejectedReason: '',
-    isDemo: true,
-  }];
-};
-
 export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
@@ -111,40 +60,18 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
       setError('');
       
       const [apts, requests] = await Promise.all([api.getAppointments(), api.getSessionRequests()]);
-      const useDemoData = import.meta.env.DEV && apts.length === 0 && requests.length === 0;
-      const displayedAppointments = useDemoData
-        ? createDemoAppointments()
-        : apts;
-      setAppointments(displayedAppointments);
-      setSessionRequests(useDemoData ? createDemoSessionRequests() : requests);
-
-      // In a real database, transactions would be filtered for this patient.
-      // Since transactions endpoints exist, we can use it or filter.
-      // Let's assume we can fetch transactions. If admin-only, we can filter patient's appointments or fetch a patient-specific billing feed.
-      // Our transactions have patientId. Let's try to get transactions and filter.
-      try {
-        const txs = await api.getAdminTransactions(); // For demo simplicity, admin route allows reading
-        const patientTxs = txs.filter(t => t.patientId === currentUser.id);
-        setTransactions(patientTxs);
-      } catch {
-        // Fallback: build transactions list dynamically from completed/paid appointments
-        const fallbackTxs = apts.map((apt, index) => ({
-          id: `tx_fallback_${index}`,
-          appointmentId: apt.id,
-          counselorName: apt.counselorName,
-          amount: apt.amount,
-          date: apt.date,
-          status: 'successful',
-          paymentMethod: 'Visa Card'
-        }));
-        setTransactions(fallbackTxs);
-      }
+      setAppointments(apts);
+      setSessionRequests(requests);
+      setTransactions(apts.filter(apt => ['upcoming', 'completed'].includes(apt.status)).map(apt => ({
+        id: apt.id, appointmentId: apt.id, counselorName: apt.counselorName, date: apt.date,
+        status: apt.status, paymentMethod: 'BJS internal care', amount: 0,
+      })));
     } catch (err) {
       setError(err.message || 'Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
-  }, [currentUser.id]);
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -230,7 +157,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const activeRequestStatuses = ['submitted', 'assigned', 'accepted', 'rejected', 'discovery_scheduled', 'discovery_completed', 'active'];
   const requestedApts = sessionRequests.filter((request) => activeRequestStatuses.includes(request.status));
   const upcomingApts = appointments.filter(a => a.status === 'upcoming');
-  const pastApts = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
+  const pastApts = appointments.filter(a => ['completed', 'cancelled', 'rejected'].includes(a.status));
   const profileGroups = [
     {
       title: 'About you',
@@ -367,6 +294,9 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         </Tabs>
       </Box>
 
+      {appointments.some(apt => apt.status === 'pending_admin') && <Alert severity="info" sx={{ mb: 2 }}>
+        {appointments.filter(apt => apt.status === 'pending_admin').length} proposed session(s) are awaiting BJS admin review. They are not confirmed yet.
+      </Alert>}
       {activeTab === 0 && (
         <Grid container spacing={2.5} sx={{ alignItems: 'flex-start' }}>
           <Grid size={{ xs: 12 }}>
@@ -476,7 +406,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                   <CheckCircleIcon color="success" />
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>No requests waiting for review</Typography>
-                    <Typography variant="body2" color="text.secondary">When you request a session, the care team will review it and assign a counselor.</Typography>
+                    <Typography variant="body2" color="text.secondary">Registration requests enter an unassigned review queue. A counselor claims the request or an admin assigns one.</Typography>
                   </Box>
                 </Paper>
               ) : (
@@ -495,8 +425,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                     const requestStatusLabel = {
                       submitted: 'Submitted',
                       assigned: 'Counselor review',
-                      rejected: 'Returned for reassignment',
-                      accepted: 'Ready to schedule discovery',
+                      rejected: 'Registration rejected',
+                      accepted: 'Registration approved · discovery conversation can happen anytime',
                       discovery_scheduled: 'Discovery scheduled',
                       discovery_completed: 'Ready to plan sessions',
                       active: 'Care plan active',
@@ -523,7 +453,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
                                 {careRequest.status === 'rejected'
-                                  ? 'The care team is finding another counselor'
+                                  ? 'Registration was rejected — contact the BJS care team'
                                   : careRequest.finalCounselorName
                                     ? `Ongoing counselor: ${careRequest.finalCounselorName}`
                                     : careRequest.assignedCounselorName
@@ -569,7 +499,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         <Box id="past-journey" sx={{ scrollMarginTop: 96 }}>
           <Box sx={{ mb: 2.5 }}>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>Recent session history</Typography>
-            <Typography variant="body2" color="text.secondary">Your completed and cancelled sessions</Typography>
+            <Typography variant="body2" color="text.secondary">Your completed, cancelled and rejected sessions</Typography>
           </Box>
           {pastApts.length === 0 ? (
             <Paper sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2, border: 1, borderColor: 'divider' }}>
@@ -601,7 +531,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>{apt.review.rating}/5</Typography>
                           </Box>
                         ) : (
-                          <Button variant="outlined" size="small" startIcon={<RateReviewIcon />} onClick={() => handleOpenReview(apt)}>Write review</Button>
+                          <Button variant="outlined" size="small" startIcon={<RateReviewIcon />} onClick={() => handleOpenReview(apt)}>Share feedback</Button>
                         ))}
                       </Box>
                     </CardContent>

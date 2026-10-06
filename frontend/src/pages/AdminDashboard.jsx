@@ -1,3 +1,4 @@
+import CareWorkflow from '../components/CareWorkflow';
 import { useState, useEffect, useCallback } from 'react';
 import { 
   Box, Container, Typography, Grid, Card, CardContent, Button, Tabs, Tab,
@@ -10,14 +11,12 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckIcon from '@mui/icons-material/Check';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SearchIcon from '@mui/icons-material/Search';
 import { api } from '../api';
 
 export default function AdminDashboard({ currentUser }) {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(3);
   const [users, setUsers] = useState([]);
-  const [transactions, setTransactions] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [careRequests, setCareRequests] = useState([]);
   const [stats, setStats] = useState(null);
@@ -45,14 +44,6 @@ export default function AdminDashboard({ currentUser }) {
 
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const [selectedCareRequest, setSelectedCareRequest] = useState(null);
-  const [assignmentCounselorId, setAssignmentCounselorId] = useState('');
-  const [assignmentReason, setAssignmentReason] = useState('');
-  const [assignmentLoading, setAssignmentLoading] = useState(false);
-  const [assignmentAvailability, setAssignmentAvailability] = useState(null);
-  const [assignmentAvailabilityLoading, setAssignmentAvailabilityLoading] = useState(false);
-
   const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!createMobile || !createName) {
@@ -118,8 +109,6 @@ export default function AdminDashboard({ currentUser }) {
       const u = await api.getAdminUsers();
       setUsers(u);
 
-      const txs = await api.getAdminTransactions();
-      setTransactions(txs);
 
       const apts = await api.getAppointments();
       setAppointments(apts);
@@ -136,61 +125,6 @@ export default function AdminDashboard({ currentUser }) {
       setLoading(false);
     }
   }, []);
-
-  const handleOpenAssignment = (careRequest) => {
-    setSelectedCareRequest(careRequest);
-    setAssignmentCounselorId(careRequest.assignedCounselorId || '');
-    setAssignmentReason('');
-    setAssignmentAvailability(null);
-    setAssignmentOpen(true);
-  };
-
-  useEffect(() => {
-    if (!assignmentOpen || !selectedCareRequest || !assignmentCounselorId) return undefined;
-    let isCurrent = true;
-    Promise.resolve().then(async () => {
-      try {
-        setAssignmentAvailabilityLoading(true);
-        const availability = await api.getCounselorSlots(assignmentCounselorId, selectedCareRequest.preferredDate);
-        if (isCurrent) setAssignmentAvailability(availability);
-      } catch (availabilityError) {
-        if (isCurrent) setAssignmentAvailability({ error: availabilityError.message, slots: [] });
-      } finally {
-        if (isCurrent) setAssignmentAvailabilityLoading(false);
-      }
-    });
-    return () => { isCurrent = false; };
-  }, [assignmentOpen, selectedCareRequest, assignmentCounselorId]);
-
-  const handleAssignCareRequest = async (event) => {
-    event.preventDefault();
-    if (!selectedCareRequest || !assignmentCounselorId) return;
-
-    try {
-      setAssignmentLoading(true);
-      const result = await api.assignSessionRequest(selectedCareRequest.id, {
-        counselorId: assignmentCounselorId,
-        reason: assignmentReason,
-      });
-      setCareRequests((previous) => previous.map((request) => request.id === selectedCareRequest.id ? result.request : request));
-      setSuccess(`Request assigned to ${result.request.assignedCounselorName}.`);
-      setAssignmentOpen(false);
-    } catch (assignError) {
-      setError(assignError.message || 'Unable to assign this care request.');
-    } finally {
-      setAssignmentLoading(false);
-    }
-  };
-
-  const handleCloseCareRequest = async (careRequest) => {
-    try {
-      const result = await api.closeSessionRequest(careRequest.id);
-      setCareRequests((previous) => previous.map((request) => request.id === careRequest.id ? result.request : request));
-      setSuccess(`Care case ${careRequest.id} closed.`);
-    } catch (closeError) {
-      setError(closeError.message || 'Unable to close this care case.');
-    }
-  };
 
   useEffect(() => {
     if (currentUser) {
@@ -234,33 +168,6 @@ export default function AdminDashboard({ currentUser }) {
     }
   };
 
-  // Reset database back to default seed data
-  const handleResetSystem = async () => {
-    if (!window.confirm('Are you sure you want to reset all database variables back to seeded defaults? All new appointments and users will be cleared.')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
-      await api.resetDatabase();
-      setSuccess('Database reset completed successfully.');
-      
-      // Reload
-      const u = await api.getAdminUsers();
-      setUsers(u);
-      const txs = await api.getAdminTransactions();
-      setTransactions(txs);
-      const s = await api.getAdminStats();
-      setStats(s);
-    } catch (err) {
-      setError(err.message || 'Failed to reset system database.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Filtering calculations
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(userQuery.toLowerCase()) || 
@@ -269,8 +176,6 @@ export default function AdminDashboard({ currentUser }) {
   );
 
   const pendingCounselors = users.filter(u => u.role === 'counselor' && !u.approved);
-  const approvedCounselors = users.filter(u => u.role === 'counselor' && u.approved && !u.suspended);
-  const activeCareRequests = careRequests.filter((request) => request.status !== 'closed');
 
   if (loading) {
     return (
@@ -286,10 +191,10 @@ export default function AdminDashboard({ currentUser }) {
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800 }}>
-            System Governance Platform
+            BJS administration
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Approve credentials, monitor transactions ledger, and suspension logs.
+            Review registrations and session proposals, manage counselors, and follow care progress.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -299,14 +204,6 @@ export default function AdminDashboard({ currentUser }) {
             onClick={() => setCreateOpen(true)}
           >
             Create User / Counselor
-          </Button>
-          <Button 
-            variant="outlined" 
-            color="warning" 
-            startIcon={<RestartAltIcon />}
-            onClick={handleResetSystem}
-          >
-            Reset Demo Data
           </Button>
         </Box>
       </Box>
@@ -388,10 +285,10 @@ export default function AdminDashboard({ currentUser }) {
         <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)}>
           <Tab label="User Directory" sx={{ fontWeight: 600, fontSize: '1rem' }} />
           <Tab 
-            label={`Pending Approvals (${pendingCounselors.length})`} 
+            label={`Counselor verification (${pendingCounselors.length})`} 
             sx={{ fontWeight: 600, fontSize: '1rem' }} 
           />
-          <Tab label="Booking Ledger" sx={{ fontWeight: 600, fontSize: '1rem' }} />
+          <Tab label="Session register" sx={{ fontWeight: 600, fontSize: '1rem' }} />
           <Tab label={`Care Requests (${careRequests.filter(request => ['submitted', 'assigned', 'rejected'].includes(request.status)).length})`} sx={{ fontWeight: 600, fontSize: '1rem' }} />
         </Tabs>
       </Box>
@@ -520,176 +417,17 @@ export default function AdminDashboard({ currentUser }) {
         </Box>
       )}
 
-      {/* TAB 2: BOOKING LEDGER */}
-      {activeTab === 2 && (
-        <Box>
-          <Typography variant="h5" sx={{ mb: 2, fontFamily: 'Outfit', fontWeight: 700 }}>
-            Booking Confirmation Ledger
-          </Typography>
-          {transactions.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
-              <Typography variant="body1" color="text.secondary">
-                No booking histories logged.
-              </Typography>
-            </Paper>
-          ) : (
-            <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Booking ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Patient Billed</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Therapist Provider</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Booking Date</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Verification Details</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Ledger Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {transactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell sx={{ fontWeight: 'mono', fontSize: '0.85rem' }}>{tx.id}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{tx.patientName}</TableCell>
-                      <TableCell>{tx.counselorName}</TableCell>
-                      <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                      <TableCell>{tx.paymentMethod}</TableCell>
-                      <TableCell align="right">
-                        <Chip label={tx.status} color="success" size="small" variant="filled" />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Box>
-      )}
+      {activeTab === 2 && <TableContainer component={Paper}><Table><TableHead><TableRow>
+        {['User', 'Counselor', 'Session', 'Date (IST)', 'Status', 'Feedback'].map(title => <TableCell key={title}>{title}</TableCell>)}
+        </TableRow></TableHead><TableBody>{appointments.map(appointment => <TableRow key={appointment.id}>
+          <TableCell>{appointment.patientName}</TableCell><TableCell>{appointment.counselorName}</TableCell>
+          <TableCell>{appointment.appointmentKind?.replaceAll('_', ' ') || 'Session'}</TableCell>
+          <TableCell>{appointment.date} {appointment.time}</TableCell><TableCell>{appointment.status.replaceAll('_', ' ')}</TableCell>
+          <TableCell>{appointment.review?.rating ? `${appointment.review.rating}/5 — ${appointment.review.reviewText || ''}` : 'Not received'}</TableCell>
+        </TableRow>)}</TableBody></Table></TableContainer>}
 
-      {activeTab === 3 && (
-        <Box>
-          <Box sx={{ mb: 2.5 }}>
-            <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>Care request queue</Typography>
-            <Typography variant="body2" color="text.secondary">Review intake, assign a counselor, and track discovery calls and ongoing care.</Typography>
-          </Box>
-          {activeCareRequests.length === 0 ? (
-            <Paper sx={{ p: 3, border: 1, borderColor: 'divider' }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>No open care requests</Typography>
-              <Typography variant="body2" color="text.secondary">New patient requests will appear here for review.</Typography>
-            </Paper>
-          ) : (
-            <Grid container spacing={2}>
-              {activeCareRequests.map((request) => {
-                const canAssign = ['submitted', 'assigned', 'rejected'].includes(request.status);
-                const counselingSessions = appointments.filter((appointment) => appointment.careRequestId === request.id && appointment.appointmentKind === 'session');
-                const canClose = request.status === 'active' && counselingSessions.some((appointment) => appointment.status === 'completed') && counselingSessions.every((appointment) => appointment.status !== 'upcoming');
-                return (
-                  <Grid size={{ xs: 12, md: 6 }} key={request.id}>
-                    <Card sx={{ height: '100%' }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2 }}>
-                          <Box>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{request.patientName}</Typography>
-                            <Typography variant="caption" color="text.secondary">Request {request.id}</Typography>
-                          </Box>
-                          <Chip label={request.status.replaceAll('_', ' ')} size="small" color={request.status === 'rejected' ? 'error' : 'primary'} />
-                        </Box>
-                        <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                          <Grid size={{ xs: 6 }}>
-                            <Typography variant="caption" color="text.secondary">PREFERRED DATE</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{request.preferredDate}</Typography>
-                          </Grid>
-                          <Grid size={{ xs: 6 }}>
-                            <Typography variant="caption" color="text.secondary">TIME / FORMAT</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{request.preferredTime} · {request.preferredFormat}</Typography>
-                          </Grid>
-                        </Grid>
-                        <Typography variant="caption" color="text.secondary">INTAKE</Typography>
-                        <Typography variant="body2" sx={{ minHeight: 40, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mb: 2 }}>
-                          {request.intakeNotes || 'No additional intake notes.'}
-                        </Typography>
-                        {request.assignedCounselorName && (
-                          <Typography variant="body2" sx={{ mb: 0.5 }}><strong>Discovery counselor:</strong> {request.assignedCounselorName}</Typography>
-                        )}
-                        {request.finalCounselorName && (
-                          <Typography variant="body2" sx={{ mb: 1 }}><strong>Ongoing counselor:</strong> {request.finalCounselorName}</Typography>
-                        )}
-                        {request.rejectedReason && <Alert severity="info" sx={{ mb: 1 }}>{request.rejectedReason}</Alert>}
-                        {request.assignmentHistory?.length > 0 && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                            {request.assignmentHistory.length} assignment{request.assignmentHistory.length === 1 ? '' : 's'} recorded
-                          </Typography>
-                        )}
-                        {canAssign && (
-                          <Button variant="outlined" size="small" onClick={() => handleOpenAssignment(request)}>
-                            {request.assignedCounselorId ? 'Reassign counselor' : 'Assign counselor'}
-                          </Button>
-                        )}
-                        {canClose && (
-                          <Button variant="text" size="small" color="success" onClick={() => handleCloseCareRequest(request)}>
-                            Close care case
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          )}
-        </Box>
-      )}
+      {activeTab === 3 && <CareWorkflow currentUser={currentUser} onAppointmentsChange={setAppointments} onRequestsChange={setCareRequests} />}
 
-      <Dialog open={assignmentOpen} onClose={() => !assignmentLoading && setAssignmentOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
-          {selectedCareRequest?.assignedCounselorId ? 'Reassign counselor' : 'Assign counselor'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select an approved, active counselor. Patients do not choose their counselor; the care team makes this assignment.
-          </Typography>
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel id="care-request-counselor-label">Counselor</InputLabel>
-            <Select
-              labelId="care-request-counselor-label"
-              label="Counselor"
-              value={assignmentCounselorId}
-              onChange={(event) => {
-                setAssignmentCounselorId(event.target.value);
-                setAssignmentAvailability(null);
-              }}
-            >
-              {approvedCounselors.map((counselor) => (
-                <MenuItem key={counselor.id} value={counselor.id}>
-                  {counselor.name} · {counselor.specialty || 'General counseling'} · {appointments.filter((appointment) => appointment.counselorId === counselor.id && appointment.status === 'upcoming').length} scheduled
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {assignmentAvailabilityLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}><CircularProgress size={22} /></Box>
-          ) : assignmentAvailability && (
-            <Alert severity={assignmentAvailability.error ? 'warning' : assignmentAvailability.slots?.some((slot) => slot.available) ? 'success' : 'info'} sx={{ mb: 2 }}>
-              {assignmentAvailability.error
-                ? assignmentAvailability.error
-                : `${assignmentAvailability.slots?.filter((slot) => slot.available).length || 0} available slots on ${selectedCareRequest?.preferredDate}. Consider specialty, caseload, and patient preference before assigning.`}
-            </Alert>
-          )}
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            label="Assignment note (optional)"
-            value={assignmentReason}
-            onChange={(event) => setAssignmentReason(event.target.value)}
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setAssignmentOpen(false)} disabled={assignmentLoading}>Cancel</Button>
-          <Button variant="contained" onClick={handleAssignCareRequest} disabled={assignmentLoading || !assignmentCounselorId}>
-            {assignmentLoading ? <CircularProgress size={22} /> : 'Save assignment'}
-          </Button>
-        </DialogActions>
-      </Dialog>
       {/* Create User/Counselor Dialog Modal */}
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>

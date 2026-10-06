@@ -1,3 +1,4 @@
+import { createCareRequest } from '../utils/careRequestService.js';
 import { User, Availability, AppointmentType, BookingLimit, AuditLog, OtpVerification } from '../models/index.js';
 import {
   compareOtp,
@@ -140,6 +141,9 @@ export const login = async (req, res) => {
     if (user.suspended) {
       return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
     }
+    if (['user', 'patient'].includes(user.role) && user.approved === false) {
+      return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
+    }
 
     await logAction(user.id, 'User login via Email + Password', req);
 
@@ -237,15 +241,30 @@ export const register = async (req, res) => {
         maxAdvanceBookingDays: 30
       });
       await newLimit.save();
+    } else if (['user', 'patient'].includes(finalRole)) {
+      // Patient accounts remain unusable until a staff member approves their intake.
+      newUser.approved = false;
     }
 
     await newUser.save();
+    let careRequest;
+    if (['user', 'patient'].includes(finalRole)) {
+      try {
+        careRequest = await createCareRequest(newUser, {
+          preferredFormat: newUser.preferredCounselingMode === 'Offline' ? 'In-Person Consultation' : 'Online Consultation',
+          intakeNotes: newUser.counselingRequirements || '',
+        });
+      } catch (error) {
+        // Do not leave a registered patient without an approval request.
+        await User.deleteOne({ id: userId });
+        throw error;
+      }
+    }
     await logAction(userId, `User registered via OTP as ${role}`, req);
 
-    const tokens = issueAuthTokens(userId);
     res.status(201).json({
-      ...tokens,
-      user: formatUser(newUser)
+      user: formatUser(newUser),
+      request: careRequest
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -276,6 +295,9 @@ export const sendMobileOtp = async (req, res) => {
       }
       if (user.suspended) {
         return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
+      }
+      if (['user', 'patient'].includes(user.role) && user.approved === false) {
+        return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
       }
     }
 
@@ -308,6 +330,9 @@ export const verifyMobileOtp = async (req, res) => {
     if (user.suspended) {
       return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
     }
+    if (['user', 'patient'].includes(user.role) && user.approved === false) {
+      return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
+    }
 
     const otpResult = await verifyOtpChallenge(mobile, otp, 'login');
     if (!otpResult.ok) {
@@ -335,7 +360,7 @@ export const refreshToken = async (req, res) => {
   try {
     const payload = verifyJwt(refreshToken, 'refresh');
     const user = await User.findOne({ id: payload.sub });
-    if (!user || user.suspended) {
+    if (!user || user.suspended || (['user', 'patient'].includes(user.role) && user.approved === false)) {
       return res.status(401).json({ message: 'Invalid refresh token' });
     }
 
