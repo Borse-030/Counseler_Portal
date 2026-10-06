@@ -27,6 +27,13 @@ const ReviewSchema = new mongoose.Schema({
   at: { type: Date, default: Date.now },
 }, { _id: false });
 
+const DiscoveryNoteSchema = new mongoose.Schema({
+  notes: { type: String, default: '' },
+  actorId: { type: String, default: '' },
+  actorName: { type: String, default: '' },
+  at: { type: Date, default: Date.now },
+}, { _id: false });
+
 const CareRequestSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   patientId: { type: String, required: true },
@@ -63,6 +70,7 @@ const CareRequestSchema = new mongoose.Schema({
   finalCounselorName: { type: String, default: '' },
   discoveryAppointmentId: { type: String, default: '' },
   discoveryNotes: { type: String, default: '' },
+  discoveryNotesHistory: { type: [DiscoveryNoteSchema], default: [] },
   appointmentIds: { type: [String], default: [] },
   assignmentHistory: { type: [AssignmentHistorySchema], default: [] },
   reviews: { type: [ReviewSchema], default: [] },

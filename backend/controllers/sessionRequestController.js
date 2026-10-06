@@ -305,11 +305,13 @@ export const updateDiscoveryNotes = async (req, res) => {
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Assigned care request not found.' });
-    if (!['accepted', 'discovery_scheduled', 'discovery_completed'].includes(careRequest.status)) {
+    if (!['accepted', 'discovery_scheduled', 'discovery_completed', 'matched', 'active'].includes(careRequest.status)) {
       return res.status(409).json({ message: 'Approve the registration before recording discovery observations.' });
     }
 
     careRequest.discoveryNotes = notes.trim();
+    if (!Array.isArray(careRequest.discoveryNotesHistory)) careRequest.discoveryNotesHistory = [];
+    careRequest.discoveryNotesHistory.push({ notes: notes.trim(), actorId: req.user.id, actorName: req.user.name, at: new Date() });
     const completedDiscovery = ['accepted', 'discovery_scheduled'].includes(careRequest.status) && Boolean(careRequest.discoveryNotes);
     const timelineStatus = completedDiscovery ? 'discovery_completed' : careRequest.status;
     if (completedDiscovery) careRequest.status = 'discovery_completed';
@@ -368,13 +370,13 @@ export const assignFinalCounselor = async (req, res) => {
 
 export const scheduleSession = async (req, res) => {
   const { sessions: submittedSessions, date, time, appointmentType = 'Video Consultation', purpose = '', kind = 'session' } = req.body;
-  if (req.user.role !== 'counselor' || req.user.approved !== true) return res.status(403).json({ message: 'Approved counselor access required.' });
+  if (req.user.role !== 'admin' && (req.user.role !== 'counselor' || req.user.approved !== true)) return res.status(403).json({ message: 'Approved counselor or admin access required.' });
 
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
     if (!careRequest.finalCounselorId) return res.status(409).json({ message: 'Assign an ongoing-care counselor before scheduling a session.' });
-    if (careRequest.finalCounselorId !== req.user.id) return res.status(403).json({ message: 'This care plan is assigned to another counselor.' });
+    if (req.user.role === 'counselor' && careRequest.finalCounselorId !== req.user.id) return res.status(403).json({ message: 'This care plan is assigned to another counselor.' });
     if (!['matched', 'active'].includes(careRequest.status)) return res.status(409).json({ message: 'The care case is not ready for sessions.' });
 
     const proposed = Array.isArray(submittedSessions) ? submittedSessions : [{ date, time, appointmentType, purpose, kind }];

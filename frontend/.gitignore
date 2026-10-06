@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Temporary local browser verification profile
+.bjs-workflow/admin-browser-profile/
+
 # Environment variables
 .env
 .env.*
