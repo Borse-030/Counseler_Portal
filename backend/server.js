@@ -69,7 +69,7 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`MindEase server is running on http://localhost:${PORT}`);
+  console.log(`Counselling Program server is running on http://localhost:${PORT}`);
   console.log(`Using MongoDB database connection.`);
 });
 

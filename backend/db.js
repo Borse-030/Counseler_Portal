@@ -16,11 +16,12 @@ export {
   User
 } from './models/index.js';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/Appointments';
+// const MONGODB_URI = process.env.MONGODB_URI
+const MONGODB_URI = "mongodb+srv://survey_test_user:SurveyTest2026@cluster0.uq5nnqw.mongodb.net/CouncelorPortal?appName=Cluster0"
 
 mongoose.connect(MONGODB_URI)
   .then(() => {
-    console.log('Connected to MongoDB');
+    console.log('Connected to MongoDB', MONGODB_URI);
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 

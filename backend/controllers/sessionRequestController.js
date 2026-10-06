@@ -51,7 +51,7 @@ const createAppointmentForRequest = async (careRequest, actor, { date, time, app
     amount: 0,
     status,
     purpose: String(purpose).slice(0, 1000),
-    clinicAddress: normalizedType === 'In-Person Consultation' ? 'MindEase Wellness Center' : '',
+    clinicAddress: normalizedType === 'In-Person Consultation' ? 'Counselling Program Wellness Center' : '',
     meetingLink: '',
     intakeNotes: kind === 'session' ? careRequest.intakeNotes : '',
     sessionNotes: '',
@@ -113,11 +113,13 @@ export const getRequests = async (req, res) => {
       ? {}
       : patientRoles.includes(req.user.role)
         ? { patientId: req.user.id }
-      : req.user.role === 'counselor'
-          ? { $or: [
-            { assignedCounselorId: req.user.id },
-            { finalCounselorId: req.user.id },
-          ] }
+        : req.user.role === 'counselor'
+          ? {
+            $or: [
+              { assignedCounselorId: req.user.id },
+              { finalCounselorId: req.user.id },
+            ]
+          }
           : null;
     if (!filter) return res.status(403).json({ message: 'Forbidden.' });
 

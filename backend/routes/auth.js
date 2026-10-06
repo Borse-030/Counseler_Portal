@@ -4,6 +4,7 @@ import {
   register,
   sendMobileOtp,
   verifyMobileOtp,
+  verifyRegistrationOtp,
   refreshToken,
   forgotPassword
 } from '../controllers/authController.js';
@@ -14,6 +15,7 @@ router.post('/login', login);
 router.post('/register', register);
 router.post('/mobile-otp-send', sendMobileOtp);
 router.post('/mobile-otp-verify', verifyMobileOtp);
+router.post('/verify-registration-otp', verifyRegistrationOtp);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', forgotPassword);
 

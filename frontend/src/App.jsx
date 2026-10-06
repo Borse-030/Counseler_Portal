@@ -1,35 +1,41 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
-import { 
-  ThemeProvider, CssBaseline, AppBar, Toolbar, Typography, Button, 
-  Box, IconButton, Dialog, DialogTitle, DialogContent, Alert, TextField, 
-  Tabs, Tab, CircularProgress, Menu, MenuItem, Avatar,
-  Divider, Grid, FormControl, InputLabel, Select, Badge, Popover, Snackbar, Chip
+import {
+  ThemeProvider, CssBaseline, AppBar, Toolbar, Typography, Button,
+  Box, IconButton, Dialog, DialogTitle, DialogContent, Alert, TextField,
+  CircularProgress, Menu, MenuItem, Avatar,
+  Divider, Badge, Popover, Chip
 } from '@mui/material';
 import SpaIcon from '@mui/icons-material/Spa';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
+// import SpaIcon from '@mui/icons-material/Spa';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 import { getTheme } from './theme';
 import { api } from './api';
 
 // Pages imports
+import LandingPage from './pages/LandingPage/LandingPage';
 import SessionRequest from './pages/SessionRequest';
 import PatientDashboard from './pages/PatientDashboard';
 import CounselorDashboard from './pages/CounselorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SessionRoom from './pages/SessionRoom';
-
-const isMobile = typeof window !== 'undefined' && window.innerWidth <= 600;
+import Register from './pages/Register';
 
 const validateMobile = (num) => {
   const digits = (num || '').replace(/\D/g, '');
-  return digits.length === 10;
+  return digits.length === 10 && /^[6-9]\d{9}$/.test(digits);
 };
 
 // Custom wrapper to protect routes based on auth status and roles
@@ -66,35 +72,17 @@ function AppContent() {
   const [notifications, setNotifications] = useState([]);
   const [notifAnchorEl, setNotifAnchorEl] = useState(null);
 
+  // Auth Dialog Mode: 'signin' | 'register'
   const [authOpen, setAuthOpen] = useState(false);
-  const [authTab, setAuthTab] = useState(0); // 0 = Login, 1 = Register
-  
-  // Auth Form State (User Registration)
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [dob, setDob] = useState('');
-  const [gender, setGender] = useState('Male');
-  const [state, setState] = useState('');
-  const [city, setCity] = useState('');
-  const [preferredLanguage, setPreferredLanguage] = useState('English');
-  const [preferredCounselingMode, setPreferredCounselingMode] = useState('Online');
-  const [counselingRequirements, setCounselingRequirements] = useState('');
-  
-  // Counselor Specific Fields
-  
+  const [authMode, setAuthMode] = useState('signin'); // 'signin' or 'register'
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
-  // OTP Login State
+  // Mobile & OTP Form State
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
-
-  // Snackbar Alert state
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState('info');
 
   // User Dropdown anchor
   const [anchorEl, setAnchorEl] = useState(null);
@@ -102,13 +90,14 @@ function AppContent() {
   useEffect(() => {
     const handleInvalidToken = () => {
       setCurrentUser(null);
+      setAuthMode('signin');
       setAuthOpen(true);
       setAuthError('Your session has expired or is invalid. Please sign in again.');
     };
     window.addEventListener('auth-invalid-token', handleInvalidToken);
     return () => window.removeEventListener('auth-invalid-token', handleInvalidToken);
   }, []);
-  
+
   const fetchNotifications = useCallback(async () => {
     if (!api.getToken()) return;
     try {
@@ -137,18 +126,23 @@ function AppContent() {
       console.error(err);
     }
   };
-  const handleOpenAuth = () => {
+
+  // Open Dialog for Sign In
+  const handleOpenSignIn = (presetMobile = '') => {
+    setAuthMode('signin');
     setAuthError('');
-    setName('');
-    setMobile('');
-    setEmail('');
-    setDob('');
-    setGender('Male');
-    setState('');
-    setCity('');
-    setPreferredLanguage('English');
-    setPreferredCounselingMode('Online');
-    setCounselingRequirements('');
+    setMobile(typeof presetMobile === 'string' ? presetMobile : '');
+    setOtp('');
+    setOtpSent(false);
+    setOtpSuccessMsg('');
+    setAuthOpen(true);
+  };
+
+  // Open Dialog for Register
+  const handleOpenRegister = (presetMobile = '') => {
+    setAuthMode('register');
+    setAuthError('');
+    setMobile(typeof presetMobile === 'string' ? presetMobile : '');
     setOtp('');
     setOtpSent(false);
     setOtpSuccessMsg('');
@@ -159,119 +153,90 @@ function AppContent() {
     setAuthOpen(false);
   };
 
+  // Send OTP handler
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
-    if (!mobile) {
-      setAuthError('Please enter your mobile number.');
+    const cleanMobile = mobile.replace(/\D/g, '');
+    if (!cleanMobile) {
+      setAuthError('Please enter your 10-digit mobile number.');
       return;
     }
-    if (!validateMobile(mobile)) {
-      setAuthError('Please enter a valid 10-digit mobile number.');
+    if (!validateMobile(cleanMobile)) {
+      setAuthError('Please enter a valid 10-digit Indian mobile number (starting with 6, 7, 8, or 9).');
       return;
     }
+
     try {
       setAuthLoading(true);
       setAuthError('');
-      const isSignUp = authTab === 1;
-      const res = await api.sendOtp(mobile, isSignUp);
+
+      const isSignUp = authMode === 'register';
+      const res = await api.sendOtp(cleanMobile, isSignUp);
+
       setOtpSent(true);
-      setOtpSuccessMsg(res.message || 'OTP sent successfully!');
+      setOtp('123456'); // Pre-fill default code for effortless testing
+      setOtpSuccessMsg(res.message || 'OTP sent successfully! Default verification code: 123456');
+      toast.info(`OTP sent to +91 ${cleanMobile}. Default code is 123456`);
     } catch (err) {
       setAuthError(err.message || 'Failed to send OTP.');
+      toast.error(err.message || 'Failed to send OTP.');
     } finally {
       setAuthLoading(false);
     }
   };
 
-  const handleOtpLoginSubmit = async (e) => {
+  // Submit OTP Verification
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
-    if (!mobile || !otp) {
-      setAuthError('Please enter both mobile number and OTP.');
+    const cleanMobile = mobile.replace(/\D/g, '');
+    if (!cleanMobile || !otp) {
+      setAuthError('Please enter both mobile number and OTP code.');
       return;
     }
+
     try {
       setAuthLoading(true);
       setAuthError('');
-      const data = await api.verifyOtp(mobile, otp);
-      setCurrentUser(data.user);
-      setAuthOpen(false);
-      if (data.user.role === 'admin') {
-        navigate('/admin');
+
+      if (authMode === 'register') {
+        // Registration verification flow
+        const res = await api.verifyRegistrationOtp(cleanMobile, otp.trim());
+
+        if (res.exists || res.registered) {
+          // User already in database -> switch to Sign In
+          toast.info('This mobile number is already registered! Redirecting to Sign In...');
+          setAuthMode('signin');
+          setOtpSent(false);
+          setOtp('');
+          setAuthError('Account already exists with this number. Please sign in with OTP.');
+          return;
+        }
+
+        // User is new -> Navigate to register page with pre-verified state
+        toast.success('Mobile number verified! Proceeding to registration intake...');
+        setAuthOpen(false);
+        navigate('/register', {
+          state: {
+            verifiedMobile: cleanMobile,
+            otpVerified: true
+          }
+        });
       } else {
-        navigate('/dashboard');
+        // Sign In verification flow
+        const data = await api.verifyOtp(cleanMobile, otp.trim());
+        setCurrentUser(data.user);
+        setAuthOpen(false);
+        toast.success(`Welcome back, ${data.user.name || 'User'}!`);
+
+        if (data.user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (err) {
       setAuthError(err.message || 'OTP verification failed.');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // Standard Register Submit (User Registration)
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
-    if (!name || !mobile) {
-      setAuthError('Please fill in required fields (Full Name and Mobile Number).');
-      return;
-    }
-
-    if (!validateMobile(mobile)) {
-      setAuthError('Please enter a valid 10-digit mobile number.');
-      return;
-    }
-    if (!otpSent) {
-      await handleSendOtp(e);
-      return;
-    }
-
-    if (!otp) {
-      setAuthError('Please enter the OTP verification code sent to your mobile.');
-      return;
-    }
-
-    try {
-      setAuthLoading(true);
-      setAuthError('');
-      const payload = {
-        otp,
-        name,
-        role: 'user',
-        mobile,
-        email,
-        dob,
-        gender,
-        state,
-        city,
-        preferredLanguage,
-        preferredCounselingMode,
-        counselingRequirements
-      };
-      const data = await api.register(payload);
-      setAuthOpen(false);
-      setSnackbarMsg(data.request?.assignedCounselorId
-        ? 'Registration request received and sent to a counselor for review. You can sign in after approval.'
-        : 'Registration request received. The care team will assign a counselor; you can sign in after approval.');
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
-
-      // Reset form states
-      setName('');
-      setMobile('');
-      setEmail('');
-      setDob('');
-      setGender('Male');
-      setState('');
-      setCity('');
-      setPreferredLanguage('English');
-      setPreferredCounselingMode('Online');
-      setCounselingRequirements('');
-      setOtp('');
-      setOtpSent(false);
-      setOtpSuccessMsg('');
-
-      navigate('/');
-    } catch (err) {
-      setAuthError(err.message || 'Registration failed.');
+      toast.error(err.message || 'OTP verification failed.');
     } finally {
       setAuthLoading(false);
     }
@@ -282,6 +247,7 @@ function AppContent() {
     setCurrentUser(null);
     setAnchorEl(null);
     navigate('/');
+    toast.info('Logged out successfully.');
   };
 
   const handleMenuOpen = (e) => {
@@ -297,47 +263,39 @@ function AppContent() {
     if (!currentUser) return null;
     const path = currentUser.role === 'admin' ? '/admin' : '/dashboard';
     return (
-      <Button 
-        component={Link} 
-        to={path} 
+      <Button
+        component={Link}
+        to={path}
         startIcon={<DashboardIcon />}
         aria-label="Dashboard"
         sx={{
-          fontWeight: 600,
-          minWidth: { xs: 40, sm: 64 },
-          px: { xs: 1, sm: 2.5 },
-          '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
+          fontWeight: 700,
+          color: '#1e1b4b',
+          fontSize: '0.86rem',
+          textTransform: 'none',
+          '& .MuiButton-startIcon': { mr: 0.75 },
         }}
       >
-        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Dashboard</Box>
-      </Button>
-    );
-  };
-
-  const renderBookSessionLink = () => {
-    if (!currentUser || (currentUser.role !== 'patient' && currentUser.role !== 'user')) return null;
-    return (
-      <Button 
-        component={Link} 
-        to="/" 
-        startIcon={<CalendarMonthIcon />}
-        aria-label="Request a session"
-        sx={{
-          fontWeight: 600,
-          minWidth: { xs: 40, sm: 64 },
-          px: { xs: 1, sm: 2.5 },
-          '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
-        }}
-      >
-        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Request Session</Box>
+        Dashboard
       </Button>
     );
   };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <AppBar position="sticky" elevation={0}>
-        <Toolbar sx={{ justifyContent: 'space-between', gap: 1, px: { xs: 1.5, sm: 3 } }}>
+      {/* Top Navbar matching attached screenshot */}
+      <AppBar
+        position="sticky"
+        elevation={0}
+        sx={{
+          bgcolor: 'rgba(255, 255, 255, 0.96)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid #e2e8f0',
+          color: '#0f172a',
+        }}
+      >
+        <Toolbar sx={{ justifyContent: 'space-between', gap: 1, px: { xs: 2, sm: 4, md: 6 }, minHeight: '70px' }}>
+
           {/* Logo Brand */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'inherit' }} component={Link} to="/">
             <SpaIcon color="primary" sx={{ fontSize: 32 }} />
@@ -346,15 +304,35 @@ function AppContent() {
             </Typography>
           </Box>
 
-          {/* Navigation Links */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 2 } }}>
+
+
+          {/* Right Navigation Controls */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
             {renderDashboardLink()}
-            {renderBookSessionLink()}
+
+            {/* Status Pill matching screenshot */}
+            {/* <Box
+              sx={{
+                display: { xs: 'none', sm: 'flex' },
+                alignItems: 'center',
+                gap: 0.75,
+                px: 1.75,
+                py: 0.6,
+                borderRadius: '99px',
+                bgcolor: '#dcfce7',
+                color: '#15803d',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+              }}
+            >
+              <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#16a34a' }} />
+              Available Today
+            </Box> */}
 
             {currentUser && (
               <Box>
-                <IconButton 
-                  color="inherit" 
+                <IconButton
+                  color="inherit"
                   onClick={(e) => setNotifAnchorEl(e.currentTarget)}
                 >
                   <Badge badgeContent={notifications.filter(n => !n.read).length} color="error">
@@ -380,12 +358,12 @@ function AppContent() {
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 300 }}>
                       {notifications.map((notif) => (
-                        <Box 
-                          key={notif.id} 
+                        <Box
+                          key={notif.id}
                           onClick={() => handleMarkNotifRead(notif.id)}
-                          sx={{ 
-                            p: 1.5, 
-                            borderRadius: 2, 
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
                             cursor: 'pointer',
                             bgcolor: notif.read ? 'transparent' : 'action.hover',
                             border: '1px solid',
@@ -407,24 +385,17 @@ function AppContent() {
               </Box>
             )}
 
-            {/* Light/Dark mode toggler */}
-            {/* <Tooltip title="Toggle light/dark theme">
-              <IconButton onClick={toggleTheme} color="inherit">
-                {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
-              </IconButton>
-            </Tooltip> */}
-
             {/* Auth options */}
             {currentUser ? (
               <Box>
-                <IconButton 
-                  onClick={handleMenuOpen} 
-                  sx={{ 
+                <IconButton
+                  onClick={handleMenuOpen}
+                  sx={{
                     p: 0.5,
                     border: '2px solid',
-                    borderColor: 'primary.light',
+                    borderColor: '#7c3aed',
                     transition: 'all 0.2s ease',
-                    '&:hover': { transform: 'scale(1.05)', borderColor: 'primary.main' }
+                    '&:hover': { transform: 'scale(1.05)' }
                   }}
                 >
                   <Avatar src={currentUser.avatar} sx={{ width: 36, height: 36 }} />
@@ -444,12 +415,10 @@ function AppContent() {
                       mt: 1,
                       overflow: 'visible',
                       boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
-                      border: '1px solid',
-                      borderColor: 'divider',
+                      border: '1px solid #e2e8f0',
                     }
                   }}
                 >
-                  {/* User Profile Card Header */}
                   <Box sx={{
                     p: 1.75,
                     mb: 1,
@@ -462,14 +431,14 @@ function AppContent() {
                     gap: 0.5
                   }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-                      <Avatar 
-                        src={currentUser.avatar} 
-                        sx={{ 
-                          width: 44, 
-                          height: 44, 
+                      <Avatar
+                        src={currentUser.avatar}
+                        sx={{
+                          width: 44,
+                          height: 44,
                           boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
                           border: '2px solid #ffffff'
-                        }} 
+                        }}
                       />
                       <Box sx={{ overflow: 'hidden', flex: 1 }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: 'Outfit', lineHeight: 1.2, noWrap: true }}>
@@ -481,14 +450,13 @@ function AppContent() {
                       </Box>
                     </Box>
 
-                    {/* Role Badge */}
-                    <Chip 
+                    <Chip
                       size="small"
                       icon={
-                        currentUser.role === 'counselor' 
-                          ? <PsychologyIcon sx={{ fontSize: '15px !important' }} /> 
-                          : currentUser.role === 'admin' 
-                            ? <AdminPanelSettingsIcon sx={{ fontSize: '15px !important' }} /> 
+                        currentUser.role === 'counselor'
+                          ? <PsychologyIcon sx={{ fontSize: '15px !important' }} />
+                          : currentUser.role === 'admin'
+                            ? <AdminPanelSettingsIcon sx={{ fontSize: '15px !important' }} />
                             : <PersonIcon sx={{ fontSize: '15px !important' }} />
                       }
                       label={`Role: ${currentUser.role || 'user'}`}
@@ -497,40 +465,17 @@ function AppContent() {
                         fontWeight: 700,
                         fontSize: '0.72rem',
                         textTransform: 'capitalize',
-                        letterSpacing: '0.2px',
-                        bgcolor: currentUser.role === 'counselor' 
-                          ? 'rgba(99,102,241,0.14)' 
-                          : currentUser.role === 'admin' 
-                            ? 'rgba(239,68,68,0.14)' 
-                            : 'rgba(16,185,129,0.14)',
-                        color: currentUser.role === 'counselor' 
-                          ? '#4f46e5' 
-                          : currentUser.role === 'admin' 
-                            ? '#dc2626' 
-                            : '#059669',
-                        border: '1px solid',
-                        borderColor: currentUser.role === 'counselor' 
-                          ? 'rgba(99,102,241,0.3)' 
-                          : currentUser.role === 'admin' 
-                            ? 'rgba(239,68,68,0.3)' 
-                            : 'rgba(16,185,129,0.3)'
+                        bgcolor: 'rgba(99,102,241,0.14)',
+                        color: '#4f46e5',
                       }}
                     />
                   </Box>
 
-                  <MenuItem 
-                    component={Link} 
-                    to={currentUser.role === 'admin' ? '/admin' : '/dashboard'} 
+                  <MenuItem
+                    component={Link}
+                    to={currentUser.role === 'admin' ? '/admin' : '/dashboard'}
                     onClick={handleMenuClose}
-                    sx={{
-                      borderRadius: 1.5,
-                      py: 1,
-                      px: 1.5,
-                      fontWeight: 600,
-                      gap: 1.25,
-                      fontSize: '0.9rem',
-                      '&:hover': { bgcolor: 'action.hover' }
-                    }}
+                    sx={{ borderRadius: 1.5, py: 1, px: 1.5, fontWeight: 600, gap: 1.25, fontSize: '0.9rem' }}
                   >
                     <DashboardIcon fontSize="small" sx={{ color: 'primary.main' }} />
                     Dashboard View
@@ -538,18 +483,9 @@ function AppContent() {
 
                   <Divider sx={{ my: 0.5 }} />
 
-                  <MenuItem 
+                  <MenuItem
                     onClick={handleLogout}
-                    sx={{
-                      borderRadius: 1.5,
-                      py: 1,
-                      px: 1.5,
-                      fontWeight: 600,
-                      gap: 1.25,
-                      fontSize: '0.9rem',
-                      color: 'error.main',
-                      '&:hover': { bgcolor: 'error.lighter', color: 'error.dark' }
-                    }}
+                    sx={{ borderRadius: 1.5, py: 1, px: 1.5, fontWeight: 600, gap: 1.25, fontSize: '0.9rem', color: 'error.main' }}
                   >
                     <LogoutIcon fontSize="small" sx={{ color: 'error.main' }} />
                     Log Out
@@ -557,279 +493,167 @@ function AppContent() {
                 </Menu>
               </Box>
             ) : (
-              <Button 
-                variant="contained" 
-                onClick={handleOpenAuth}
-                startIcon={ isMobile ? null : <AccountCircleIcon />}
-              >
-                Sign In
-              </Button>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {/* Sign In text link */}
+                <Button
+                  variant="text"
+                  onClick={() => handleOpenSignIn('')}
+                  sx={{
+                    fontWeight: 700,
+                    color: '#475569',
+                    textTransform: 'none',
+                    fontSize: '0.9rem',
+                    '&:hover': { color: '#1e1b4b', bgcolor: 'transparent' }
+                  }}
+                >
+                  Sign In
+                </Button>
+
+                {/* Book a Counselling Session button */}
+                <Button
+                  onClick={() => handleOpenRegister('')}
+                  variant="contained"
+                  startIcon={<ShieldOutlinedIcon sx={{ fontSize: '17px !important' }} />}
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '0.86rem',
+                    borderRadius: '12px',
+                    bgcolor: '#4c3b71',
+                    color: '#ffffff',
+                    px: 2.25,
+                    py: 0.9,
+                    textTransform: 'none',
+                    boxShadow: 'none',
+                    '&:hover': {
+                      bgcolor: '#3b2064',
+                      boxShadow: 'none',
+                    }
+                  }}
+                >
+                  Register
+                </Button>
+
+                <Avatar
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+                  sx={{ width: 34, height: 34, display: { xs: 'none', sm: 'inline-block' } }}
+                />
+              </Box>
             )}
           </Box>
         </Toolbar>
       </AppBar>
 
       {/* Main View Display Container */}
-      <Box sx={{ flexGrow: 1 }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         <Routes>
-          <Route 
-            path="/" 
+          <Route
+            path="/"
             element={
-              <SessionRequest 
-                onAuthRedirect={handleOpenAuth} 
-                currentUser={currentUser} 
+              <LandingPage
+                onAuthRedirect={handleOpenSignIn}
+                onOpenRegisterAuth={handleOpenRegister}
+                currentUser={currentUser}
               />
-            } 
+            }
           />
-          
-          <Route 
-            path="/dashboard" 
+
+          <Route
+            path="/session-request"
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenAuth} allowedRoles={['patient', 'user', 'counselor']}>
+              <SessionRequest
+                onAuthRedirect={handleOpenSignIn}
+                currentUser={currentUser}
+              />
+            }
+          />
+
+          <Route
+            path="/register"
+            element={
+              <Register
+                onAuthSuccess={setCurrentUser}
+                onOpenAuth={handleOpenSignIn}
+                currentUser={currentUser}
+              />
+            }
+          />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenSignIn} allowedRoles={['patient', 'user', 'counselor']}>
                 {currentUser?.role === 'counselor' ? (
                   <CounselorDashboard currentUser={currentUser} />
                 ) : (
                   <PatientDashboard currentUser={currentUser} onUserUpdated={setCurrentUser} />
                 )}
               </ProtectedRoute>
-            } 
+            }
           />
 
-          <Route 
-            path="/admin" 
+          <Route
+            path="/admin"
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenAuth} allowedRoles={['admin']}>
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenSignIn} allowedRoles={['admin']}>
                 <AdminDashboard currentUser={currentUser} />
               </ProtectedRoute>
-            } 
+            }
           />
 
-          <Route 
-            path="/session/:id" 
+          <Route
+            path="/session/:id"
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenAuth}>
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenSignIn}>
                 <SessionRoom currentUser={currentUser} />
               </ProtectedRoute>
-            } 
+            }
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>
 
-      {/* Auth Portal Modal Dialog */}
+      {/* Dynamic Unified Verification Dialog (Sign In or Register) */}
       <Dialog open={authOpen} onClose={handleCloseAuth} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ textAlign: 'center', pb: 0 }}>
-          <Tabs 
-            value={authTab} 
-            onChange={(e, val) => { 
-              setAuthTab(val); 
-              setAuthError(''); 
-              setOtpSent(false); 
-              setMobile(''); 
-              setOtp(''); 
-              setOtpSuccessMsg(''); 
-            }} 
-            centered
+        <DialogTitle sx={{ textAlign: 'center', pt: 3, pb: 1 }}>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              p: 1.25,
+              borderRadius: '50%',
+              bgcolor: '#f3e8ff',
+              color: '#7c3aed',
+              mb: 1
+            }}
           >
-            <Tab label="Sign In" />
-            <Tab label="Register" />
-          </Tabs>
+            {authMode === 'register' ? <HowToRegOutlinedIcon /> : <LockOutlinedIcon />}
+          </Box>
+          <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, color: '#1e1b4b' }}>
+            {authMode === 'register' ? 'Register for Counselling Program' : 'Sign In to Counselling Program'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {authMode === 'register'
+              ? 'Enter your mobile number and verify OTP to start registration.'
+              : 'Enter your registered mobile number to sign in securely.'}
+          </Typography>
         </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
-          {authError && <Alert severity="error" sx={{ mb: 2 }}>{authError}</Alert>}
-          {otpSuccessMsg && <Alert severity="success" sx={{ mb: 2 }}>{otpSuccessMsg}</Alert>}
+        <DialogContent sx={{ mt: 1 }}>
+          {authError && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{authError}</Alert>}
+          {otpSuccessMsg && <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>{otpSuccessMsg}</Alert>}
 
-          {authTab === 0 ? (
-            <Box>
-              <form onSubmit={otpSent ? handleOtpLoginSubmit : handleSendOtp}>
-                <TextField
-                  label="Mobile Number"
-                  placeholder="e.g. 9876543210"
-                  fullWidth
-                  margin="normal"
-                  disabled={otpSent}
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  inputProps={{ maxLength: 10 }}
-                />
-
-                {otpSent && (
-                  <TextField
-                    label="OTP Verification Code"
-                    placeholder="Enter 6-digit code"
-                    fullWidth
-                    margin="normal"
-                    required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    inputProps={{ maxLength: 6, inputMode: 'numeric' }}
-                    autoFocus
-                  />
-                )}
-
-                <Button
-                  type="submit"
-                  variant="contained"
-                  fullWidth
-                  sx={{ mt: 3, py: 1.25, borderRadius: 2, fontWeight: 600 }}
-                  disabled={authLoading}
-                >
-                  {authLoading ? (
-                    <CircularProgress size={24} />
-                  ) : (
-                    otpSent ? 'Verify & Log In' : 'Send OTP Code'
-                  )}
-                </Button>
-              </form>
-              {otpSent && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setOtpSent(false);
-                      setOtp('');
-                      setOtpSuccessMsg('');
-                      setAuthError('');
-                    }}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Change Number
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={handleSendOtp}
-                    disabled={authLoading}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Resend OTP
-                  </Button>
-                </Box>
-              )}
-            </Box>
-          ) : (
-            // Register Form (User Registration)
-            <form onSubmit={handleRegisterSubmit}>
-              <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Full Name"
-                    fullWidth
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Mobile Number"
-                    placeholder="e.g. 9876543210"
-                    fullWidth
-                    required
-                    disabled={otpSent}
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    inputProps={{ maxLength: 10 }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Email Address"
-                    type="email"
-                    placeholder="e.g. user@example.com"
-                    fullWidth
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Date of Birth (DOB)"
-                    type="date"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <FormControl fullWidth>
-                    <InputLabel>Gender</InputLabel>
-                    <Select
-                      value={gender}
-                      label="Gender"
-                      onChange={(e) => setGender(e.target.value)}
-                    >
-                      <MenuItem value="Male">Male</MenuItem>
-                      <MenuItem value="Female">Female</MenuItem>
-                      <MenuItem value="Other">Other</MenuItem>
-                      <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    label="State"
-                    fullWidth
-                    placeholder="e.g. Maharashtra"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    label="City"
-                    fullWidth
-                    placeholder="e.g. Mumbai"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Preferred Language</InputLabel>
-                    <Select
-                      value={preferredLanguage}
-                      label="Preferred Language"
-                      onChange={(e) => setPreferredLanguage(e.target.value)}
-                    >
-                      <MenuItem value="English">English</MenuItem>
-                      <MenuItem value="Hindi">Hindi</MenuItem>
-                      <MenuItem value="Marathi">Marathi</MenuItem>
-                      <MenuItem value="Gujarati">Gujarati</MenuItem>
-                      <MenuItem value="Bengali">Bengali</MenuItem>
-                      <MenuItem value="Tamil">Tamil</MenuItem>
-                      <MenuItem value="Telugu">Telugu</MenuItem>
-                      <MenuItem value="Kannada">Kannada</MenuItem>
-                      <MenuItem value="Other">Other</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Preferred Counseling Mode</InputLabel>
-                    <Select
-                      value={preferredCounselingMode}
-                      label="Preferred Counseling Mode"
-                      onChange={(e) => setPreferredCounselingMode(e.target.value)}
-                    >
-                      <MenuItem value="Online">Online</MenuItem>
-                      <MenuItem value="Offline">Offline</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    label="Briefly describe your counseling requirements"
-                    multiline
-                    rows={3}
-                    fullWidth
-                    placeholder="Describe what counseling or support you are looking for..."
-                    value={counselingRequirements}
-                    onChange={(e) => setCounselingRequirements(e.target.value)}
-                  />
-                </Grid>
-              </Grid>
+          <Box>
+            <form onSubmit={otpSent ? handleAuthSubmit : handleSendOtp}>
+              <TextField
+                label="Mobile Number"
+                placeholder="e.g. 9876543210"
+                fullWidth
+                margin="normal"
+                disabled={otpSent}
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+                autoFocus
+              />
 
               {otpSent && (
                 <TextField
@@ -841,62 +665,124 @@ function AppContent() {
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   inputProps={{ maxLength: 6, inputMode: 'numeric' }}
+                  helperText="Default testing code: 123456"
                   autoFocus
-                  sx={{ mt: 2 }}
                 />
               )}
 
-              <Button 
-                type="submit" 
-                variant="contained" 
-                fullWidth 
-                sx={{ mt: 3, py: 1.25, borderRadius: 2, fontWeight: 600 }}
+              <Button
+                type="submit"
+                variant="contained"
+                fullWidth
+                sx={{
+                  mt: 3,
+                  py: 1.25,
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  bgcolor: '#4c3b71',
+                  '&:hover': { bgcolor: '#3b2064' }
+                }}
                 disabled={authLoading}
               >
                 {authLoading ? (
-                  <CircularProgress size={24} />
+                  <CircularProgress size={24} color="inherit" />
                 ) : (
-                  otpSent ? 'Submit & Create Account' : 'Send OTP Code'
+                  otpSent
+                    ? (authMode === 'register' ? 'Verify & Continue to Intake' : 'Verify & Sign In')
+                    : 'Send OTP Code'
                 )}
               </Button>
             </form>
-          )}
-          {otpSent && authTab === 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-              <Button 
-                size="small" 
-                onClick={() => {
-                  setOtpSent(false);
-                  setOtp('');
-                  setOtpSuccessMsg('');
-                  setAuthError('');
-                }}
-                sx={{ textTransform: 'none' }}
-              >
-                Change Number
-              </Button>
-              <Button 
-                size="small" 
-                onClick={handleSendOtp}
-                disabled={authLoading}
-                sx={{ textTransform: 'none' }}
-              >
-                Resend OTP
-              </Button>
+
+            {otpSent && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtp('');
+                    setOtpSuccessMsg('');
+                    setAuthError('');
+                  }}
+                  sx={{ textTransform: 'none', color: '#64748b' }}
+                >
+                  Change Number
+                </Button>
+                <Button
+                  size="small"
+                  onClick={handleSendOtp}
+                  disabled={authLoading}
+                  sx={{ textTransform: 'none', color: '#7c3aed', fontWeight: 700 }}
+                >
+                  Resend OTP
+                </Button>
+              </Box>
+            )}
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* Toggle between Register & Sign In inside modal */}
+            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: '#f8fafc', borderRadius: 2.5, border: '1px solid #e2e8f0' }}>
+              {authMode === 'register' ? (
+                <>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Already have an account?
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => {
+                      setAuthMode('signin');
+                      setOtpSent(false);
+                      setOtp('');
+                      setAuthError('');
+                      setOtpSuccessMsg('');
+                    }}
+                    sx={{ fontWeight: 700, borderRadius: '10px', textTransform: 'none', borderColor: '#4c3b71', color: '#4c3b71' }}
+                  >
+                    Switch to Sign In
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Don&apos;t have an account yet?
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => {
+                      setAuthMode('register');
+                      setOtpSent(false);
+                      setOtp('');
+                      setAuthError('');
+                      setOtpSuccessMsg('');
+                    }}
+                    endIcon={<ArrowForwardIcon />}
+                    sx={{ fontWeight: 700, borderRadius: '10px', textTransform: 'none', borderColor: '#4c3b71', color: '#4c3b71' }}
+                  >
+                    Begin Intake Registration
+                  </Button>
+                </>
+              )}
             </Box>
-          )}
+          </Box>
         </DialogContent>
       </Dialog>
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={8000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
-          {snackbarMsg}
-        </Alert>
-      </Snackbar>
+
+      {/* Global Toast Container for all feedback */}
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
     </Box>
   );
 }

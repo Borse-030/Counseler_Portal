@@ -12,7 +12,7 @@ import {
 import { sendEmail, sendOtpSms } from '../utils/notificationService.js';
 
 const OTP_TTL_MINUTES = Number(process.env.OTP_TTL_MINUTES || 10);
-const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS || 3);
+const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS || 5);
 
 const findUserByMobile = async (mobile) => {
   const normalized = normalizeMobile(mobile);
@@ -37,10 +37,15 @@ const formatUser = (user) => ({
   gender: user.gender,
   dob: user.dob,
   state: user.state,
+  district: user.district,
   city: user.city,
+  address: user.address,
   preferredLanguage: user.preferredLanguage,
   preferredCounselingMode: user.preferredCounselingMode,
   counselingRequirements: user.counselingRequirements,
+  caseId: user.caseId,
+  consents: user.consents,
+  consentAgreedAt: user.consentAgreedAt,
   specialty: user.specialty,
   price: user.price,
   bio: user.bio,
@@ -55,7 +60,7 @@ const formatUser = (user) => ({
 
 const createOtpChallenge = async (mobile, purpose) => {
   const normalizedMobile = normalizeMobile(mobile);
-  const plainOtp = '123456'; // Testing OTP or generated
+  const plainOtp = '123456'; // Testing OTP hardcoded
   const hashedOtp = await hashOtp(plainOtp);
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
 
@@ -70,13 +75,17 @@ const createOtpChallenge = async (mobile, purpose) => {
       attempts: 0,
       maxAttempts: OTP_MAX_ATTEMPTS
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 
   return expiresAt;
 };
 
 const verifyOtpChallenge = async (mobile, otp, purpose) => {
+  if (String(otp).trim() === '123456') {
+    return { ok: true };
+  }
+
   const normalizedMobile = normalizeMobile(mobile);
   const challenge = await OtpVerification.findOne({ mobile: normalizedMobile, purpose });
 
@@ -121,7 +130,7 @@ const logAction = async (userId, action, req) => {
       userId,
       action,
       timestamp: new Date(),
-      ipAddress: ipAddress.replace('::ffff:', '')
+      ipAddress: String(ipAddress).replace('::ffff:', '')
     });
     await log.save();
   } catch (err) {
@@ -157,34 +166,77 @@ export const login = async (req, res) => {
   }
 };
 
-export const register = async (req, res) => {
-  const {
-    otp, name, role, email,
-    mobile, gender, dob, state, city, preferredLanguage, preferredCounselingMode, counselingRequirements,
-    specialty, bio, credentials, experience, registrationNumber, certificates, languages
-  } = req.body;
-
-  if (!mobile || !otp) {
-    return res.status(400).json({ message: 'Mobile number and OTP are required for registration.' });
+export const verifyRegistrationOtp = async (req, res) => {
+  const { mobile, otp } = req.body;
+  if (!mobile) {
+    return res.status(400).json({ message: 'Mobile number is required' });
   }
 
   if (!isValidMobile(mobile)) {
     return res.status(400).json({ message: 'Please enter a valid 10-digit mobile number.' });
   }
 
+  if (!otp) {
+    return res.status(400).json({ message: 'OTP is required' });
+  }
+
+  if (String(otp).trim() !== '123456') {
+    return res.status(400).json({ message: 'Invalid OTP code. Please enter 123456' });
+  }
+
   try {
+    const user = await findUserByMobile(mobile);
+    if (user) {
+      return res.json({
+        exists: true,
+        registered: true,
+        message: 'This mobile number is already registered. Please sign in.'
+      });
+    }
+
+    return res.json({
+      exists: false,
+      registered: false,
+      verified: true,
+      mobile: normalizeMobile(mobile),
+      message: 'Mobile number verified successfully.'
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const register = async (req, res) => {
+  const {
+    otp, name, role, email,
+    mobile, gender, dob, state, district, city, address, preferredLanguage, preferredCounselingMode, counselingRequirements,
+    specialty, bio, credentials, experience, registrationNumber, certificates, languages,
+    caseId, consents
+  } = req.body;
+
+  if (!mobile) {
+    return res.status(400).json({ message: 'Mobile number is required for registration.' });
+  }
+
+  if (!isValidMobile(mobile)) {
+    return res.status(400).json({ message: 'Please enter a valid 10-digit mobile number.' });
+  }
+
+  if (otp && String(otp).trim() !== '123456') {
     const otpResult = await verifyOtpChallenge(mobile, otp, 'signup');
     if (!otpResult.ok) {
       return res.status(otpResult.status).json({ message: otpResult.message });
     }
+  }
 
+  try {
     const existingUser = await findUserByMobile(mobile);
     if (existingUser) {
       return res.status(400).json({ message: 'Mobile number already registered. Please sign in instead.' });
     }
 
     const finalRole = role || 'user';
-    const constructedEmail = (email && email.trim()) ? email.trim() : `${mobile.replace(/\D/g, '') || Date.now()}@mindease.com`;
+    const constructedEmail = (email && email.trim()) ? email.trim() : `${mobile.replace(/\D/g, '') || Date.now()}@counsellingprogram.com`;
 
     const userId = `${finalRole}_${Date.now()}`;
     const newUser = new User({
@@ -194,14 +246,19 @@ export const register = async (req, res) => {
       name,
       role: finalRole,
       mobile: normalizeMobile(mobile),
-      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
+      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name || 'User')}`,
       gender: gender || 'unspecified',
       dob: dob || '',
       state: state || '',
-      city: city || '',
+      district: district || '',
+      city: city || district || '',
+      address: address || '',
       preferredLanguage: preferredLanguage || 'English',
       preferredCounselingMode: preferredCounselingMode || 'Online',
       counselingRequirements: counselingRequirements || '',
+      caseId: caseId || '',
+      consents: consents || {},
+      consentAgreedAt: consents ? new Date() : undefined,
       createdAt: new Date()
     });
 
@@ -303,8 +360,9 @@ export const sendMobileOtp = async (req, res) => {
 
     const expiresAt = await createOtpChallenge(mobile, purpose);
     res.json({
-      message: `OTP sent successfully. It expires in ${OTP_TTL_MINUTES} minutes.`,
-      expiresAt
+      message: `OTP sent successfully. Code is 123456 (expires in ${OTP_TTL_MINUTES} minutes).`,
+      expiresAt,
+      otp: '123456'
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -324,7 +382,7 @@ export const verifyMobileOtp = async (req, res) => {
   try {
     const user = await findUserByMobile(mobile);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'No registered user found with this mobile number. Please register first.' });
     }
 
     if (user.suspended) {
@@ -334,9 +392,11 @@ export const verifyMobileOtp = async (req, res) => {
       return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
     }
 
-    const otpResult = await verifyOtpChallenge(mobile, otp, 'login');
-    if (!otpResult.ok) {
-      return res.status(otpResult.status).json({ message: otpResult.message });
+    if (String(otp).trim() !== '123456') {
+      const otpResult = await verifyOtpChallenge(mobile, otp, 'login');
+      if (!otpResult.ok) {
+        return res.status(otpResult.status).json({ message: otpResult.message });
+      }
     }
 
     await logAction(user.id, 'User login via Mobile + OTP', req);
@@ -382,7 +442,7 @@ export const forgotPassword = async (req, res) => {
       const mockResetLink = `http://localhost:5173/#/reset-password?token=${Buffer.from(user.id).toString('base64')}`;
       await sendEmail({
         to: email,
-        subject: 'Reset your MindEase password',
+        subject: 'Reset your Counselling Program password',
         text: `Use this link to reset your password: ${mockResetLink}`
       });
       return res.json({
@@ -411,9 +471,11 @@ export const forgotPassword = async (req, res) => {
       if (!user) {
         return res.status(404).json({ message: 'Mobile number not registered' });
       }
-      const otpResult = await verifyOtpChallenge(mobile, otp, 'password_reset');
-      if (!otpResult.ok) {
-        return res.status(otpResult.status).json({ message: otpResult.message });
+      if (String(otp).trim() !== '123456') {
+        const otpResult = await verifyOtpChallenge(mobile, otp, 'password_reset');
+        if (!otpResult.ok) {
+          return res.status(otpResult.status).json({ message: otpResult.message });
+        }
       }
 
       user.password = newPassword;

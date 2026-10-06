@@ -68,7 +68,7 @@ export const sendEmail = async ({ to, subject, text, html }) => {
   }
 
   const fromAddress = process.env.MAIL_FROM_ADDRESS || process.env.MAIL_USERNAME;
-  const fromName = process.env.MAIL_FROM_NAME || 'MindEase';
+  const fromName = process.env.MAIL_FROM_NAME || 'Counselling Program';
   return transport.sendMail({
     from: `"${fromName}" <${fromAddress}>`,
     to,
@@ -128,7 +128,7 @@ export const sendNotification = async (userId, message, options = {}) => {
 
     await sendEmail({
       to: options.email || user?.email,
-      subject: options.subject || 'MindEase notification',
+      subject: options.subject || 'Counselling Program notification',
       text: options.emailText || message,
       html: options.emailHtml
     });

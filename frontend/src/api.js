@@ -7,7 +7,7 @@ let isRefreshing = false;
 
 const request = async (endpoint, options = {}) => {
   const url = `${BASE_URL}${endpoint}`;
-  
+
   const headers = {
     'Content-Type': 'application/json',
     ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
@@ -36,7 +36,6 @@ const request = async (endpoint, options = {}) => {
           api.setRefreshToken(refreshData.refreshToken);
         }
         isRefreshing = false;
-        // Retry the original request with new token
         return request(endpoint, options);
       }
     } catch (e) {
@@ -48,7 +47,6 @@ const request = async (endpoint, options = {}) => {
 
   if (!response.ok) {
     if (response.status === 401 && (data.message === 'Invalid token' || data.message === 'Invalid token.' || data.message === 'Token expired')) {
-      // Clear invalid stale token
       api.logout();
       window.dispatchEvent(new CustomEvent('auth-invalid-token'));
     }
@@ -76,11 +74,11 @@ export const api = {
       localStorage.removeItem('refreshToken');
     }
   },
-  
+
   getToken: () => authToken,
 
   getRefreshToken: () => refreshToken,
-  
+
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
@@ -138,6 +136,13 @@ export const api = {
     return data;
   },
 
+  verifyRegistrationOtp: async (mobile, otp) => {
+    return request('/auth/verify-registration-otp', {
+      method: 'POST',
+      body: JSON.stringify({ mobile, otp }),
+    });
+  },
+
   refreshSession: async () => {
     const data = await request('/auth/refresh', {
       method: 'POST',
@@ -159,7 +164,7 @@ export const api = {
     if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
     if (filters.minRating) params.append('minRating', filters.minRating);
     if (filters.search) params.append('search', filters.search);
-    
+
     const queryStr = params.toString() ? `?${params.toString()}` : '';
     return request(`/counselors${queryStr}`);
   },

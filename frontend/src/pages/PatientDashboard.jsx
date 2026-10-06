@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   Box, Container, Typography, Grid, Card, CardContent, Button, Tabs, Tab,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Rating, TextField,
@@ -29,6 +29,57 @@ const getAppointmentDateParts = (dateValue) => {
   };
 };
 
+const createDemoAppointments = () => {
+  const dateInDays = (daysFromNow) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  return [
+    {
+      id: 'demo-session-next',
+      status: 'upcoming',
+      counselorName: 'Dr. Ananya Sen',
+      counselorSpecialty: 'CBT Specialist',
+      date: dateInDays(3),
+      time: '4:00 PM',
+      duration: 50,
+      appointmentType: 'Online Consultation',
+      isDemo: true,
+    },
+    {
+      id: 'demo-session-following',
+      status: 'upcoming',
+      counselorName: 'Dr. Sameer Joshi',
+      counselorSpecialty: 'Clinical Psychologist',
+      date: dateInDays(8),
+      time: '11:00 AM',
+      duration: 50,
+      appointmentType: 'In-Person Consultation',
+      clinicAddress: 'Counselling Program Wellness Center, Pune',
+      isDemo: true,
+    },
+  ];
+};
+
+const createDemoSessionRequests = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 10);
+  return [{
+    id: 'demo-request-pending',
+    status: 'submitted',
+    patientName: 'You',
+    preferredDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+    preferredTime: 'Afternoon',
+    preferredFormat: 'Online Consultation',
+    intakeNotes: 'Support with stress and sleep.',
+    assignedCounselorName: '',
+    rejectedReason: '',
+    isDemo: true,
+  }];
+};
+
 export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
@@ -36,7 +87,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Tab control
   const [activeTab, setActiveTab] = useState(0);
 
@@ -58,7 +109,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
     try {
       setLoading(true);
       setError('');
-      
+
       const [apts, requests] = await Promise.all([api.getAppointments(), api.getSessionRequests()]);
       setAppointments(apts);
       setSessionRequests(requests);
@@ -103,11 +154,11 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
       setReviewLoading(true);
       setReviewError('');
       await api.submitReview(selectedApt.id, rating, reviewText);
-      
+
       // Reload dashboard appointments
       const updated = await api.getAppointments();
       setAppointments(updated);
-      
+
       setReviewOpen(false);
     } catch (err) {
       setReviewError(err.message || 'Failed to submit review.');
@@ -174,7 +225,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         ['Mobile number', currentUser.mobile],
       ],
     },
-    
+
     {
       title: 'Preferences',
       fields: [
@@ -282,8 +333,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         </Grid>
       </Card>
 
-      
-      
+
+
       {/* Dashboard Sections */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2.5 }}>
         <Tabs value={activeTab} onChange={(event, value) => setActiveTab(value)} variant="scrollable" allowScrollButtonsMobile>
@@ -317,7 +368,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>No confirmed sessions yet</Typography>
                     <Typography variant="body2" color="text.secondary">Your next session will appear here with its time and joining details.</Typography>
                   </Box>
-                    <Button size="small" variant="outlined" onClick={() => navigate('/')}>Request a session</Button>
+                  <Button size="small" variant="outlined" onClick={() => navigate('/')}>Request a session</Button>
                 </Paper>
               ) : (
                 <Grid container spacing={2}>
@@ -325,67 +376,67 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                     const sessionDate = getAppointmentDateParts(apt.date);
                     return (
                       <Grid size={{ xs: 12, lg: 6 }} key={apt.id}>
-                      <Card sx={{ height: '100%', border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                        <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
-                            <Box sx={{
-                              width: 76,
-                              minHeight: 82,
-                              flex: '0 0 auto',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderRadius: 2,
-                              bgcolor: index === 0 ? 'primary.light' : 'action.hover',
-                              color: index === 0 ? 'primary.dark' : 'text.primary',
-                              px: 1,
-                            }}>
-                              <Typography variant="overline" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{sessionDate.month}</Typography>
-                              <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.15 }}>{sessionDate.day}</Typography>
-                              <Typography variant="caption" sx={{ textAlign: 'center' }}>{sessionDate.weekday}</Typography>
-                            </Box>
-
-                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
-                                <Chip label={apt.appointmentKind === 'discovery' ? 'Discovery call' : index === 0 ? 'Next session' : 'Confirmed'} size="small" color={apt.appointmentKind === 'discovery' ? 'info' : index === 0 ? 'success' : 'primary'} />
-                                <Chip label="Assigned by care team" size="small" variant="outlined" />
-                                {apt.appointmentType && <Chip label={apt.appointmentType.replace(' Consultation', '')} size="small" variant="outlined" />}
-                                {apt.isDemo && <Chip label="Sample" size="small" variant="outlined" />}
+                        <Card sx={{ height: '100%', border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                          <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                              <Box sx={{
+                                width: 76,
+                                minHeight: 82,
+                                flex: '0 0 auto',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: 2,
+                                bgcolor: index === 0 ? 'primary.light' : 'action.hover',
+                                color: index === 0 ? 'primary.dark' : 'text.primary',
+                                px: 1,
+                              }}>
+                                <Typography variant="overline" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{sessionDate.month}</Typography>
+                                <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.15 }}>{sessionDate.day}</Typography>
+                                <Typography variant="caption" sx={{ textAlign: 'center' }}>{sessionDate.weekday}</Typography>
                               </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-                                <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.light', color: 'primary.dark' }}>
-                                  {apt.counselorName?.charAt(0) || <SelfImprovementIcon />}
-                                </Avatar>
-                                <Box sx={{ minWidth: 0 }}>
-                                  <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.3 }}>{apt.counselorName}</Typography>
-                                  <Typography variant="body2" color="text.secondary" noWrap>{apt.counselorSpecialty || 'Counselor'}</Typography>
+
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
+                                  <Chip label={apt.appointmentKind === 'discovery' ? 'Discovery call' : index === 0 ? 'Next session' : 'Confirmed'} size="small" color={apt.appointmentKind === 'discovery' ? 'info' : index === 0 ? 'success' : 'primary'} />
+                                  <Chip label="Assigned by care team" size="small" variant="outlined" />
+                                  {apt.appointmentType && <Chip label={apt.appointmentType.replace(' Consultation', '')} size="small" variant="outlined" />}
+                                  {apt.isDemo && <Chip label="Sample" size="small" variant="outlined" />}
                                 </Box>
-                              </Box>
-                              <Typography variant="body2" sx={{ fontWeight: 600, mt: 1 }}>
-                                {apt.time || 'Time to be confirmed'}{apt.duration ? ` · ${apt.duration} min` : ''}
-                              </Typography>
-                            </Box>
-
-                            <Box sx={{ width: { xs: '100%', sm: 190 }, flex: '0 0 auto' }}>
-                              {apt.isDemo ? (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: { xs: 'left', sm: 'center' } }}>
-                                  Sample appointment · no live link
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+                                  <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.light', color: 'primary.dark' }}>
+                                    {apt.counselorName?.charAt(0) || <SelfImprovementIcon />}
+                                  </Avatar>
+                                  <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.3 }}>{apt.counselorName}</Typography>
+                                    <Typography variant="body2" color="text.secondary" noWrap>{apt.counselorSpecialty || 'Counselor'}</Typography>
+                                  </Box>
+                                </Box>
+                                <Typography variant="body2" sx={{ fontWeight: 600, mt: 1 }}>
+                                  {apt.time || 'Time to be confirmed'}{apt.duration ? ` · ${apt.duration} min` : ''}
                                 </Typography>
-                              ) : apt.appointmentType === 'In-Person Consultation' ? (
-                                <Box>
-                                  <Typography variant="caption" color="text.secondary">MEETING LOCATION</Typography>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.clinicAddress || 'Address shared after confirmation'}</Typography>
-                                </Box>
-                              ) : (
-                                <Button variant="contained" fullWidth startIcon={<VideoCallIcon />} onClick={() => handleJoinSession(apt.id)}>
-                                  Enter video room
-                                </Button>
-                              )}
+                              </Box>
+
+                              <Box sx={{ width: { xs: '100%', sm: 190 }, flex: '0 0 auto' }}>
+                                {apt.isDemo ? (
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: { xs: 'left', sm: 'center' } }}>
+                                    Sample appointment · no live link
+                                  </Typography>
+                                ) : apt.appointmentType === 'In-Person Consultation' ? (
+                                  <Box>
+                                    <Typography variant="caption" color="text.secondary">MEETING LOCATION</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.clinicAddress || 'Address shared after confirmation'}</Typography>
+                                  </Box>
+                                ) : (
+                                  <Button variant="contained" fullWidth startIcon={<VideoCallIcon />} onClick={() => handleJoinSession(apt.id)}>
+                                    Enter video room
+                                  </Button>
+                                )}
+                              </Box>
                             </Box>
-                          </Box>
-                        </CardContent>
-                      </Card>
+                          </CardContent>
+                        </Card>
                       </Grid>
                     );
                   })}
@@ -491,7 +542,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
             </Box>
           </Grid>
 
-          
+
         </Grid>
       )}
 
@@ -646,8 +697,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseReview} disabled={reviewLoading}>Cancel</Button>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={handleReviewSubmit}
             disabled={reviewLoading}
           >
@@ -714,7 +765,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
           <Typography variant="caption" color="text.secondary">
             MINDEASE IN-HOUSE NGO SCHEDULING SYSTEM
           </Typography>
-          
+
           <Divider sx={{ my: 3 }} />
 
           {selectedTx && (
