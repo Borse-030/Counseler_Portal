@@ -1,5 +1,12 @@
 import mongoose from 'mongoose';
 
+const SessionNoteHistorySchema = new mongoose.Schema({
+  notes: { type: String, default: '' },
+  actorId: { type: String, default: '' },
+  actorName: { type: String, default: '' },
+  at: { type: Date, default: Date.now },
+}, { _id: false });
+
 const AppointmentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   careRequestId: { type: String, default: '' },
@@ -24,6 +31,7 @@ const AppointmentSchema = new mongoose.Schema({
   clinicAddress: { type: String, default: '' },
   intakeNotes: { type: String, default: '' },
   sessionNotes: { type: String, default: '' },
+  sessionNoteHistory: { type: [SessionNoteHistorySchema], default: [] },
   review: {
     rating: { type: Number },
     reviewText: { type: String },

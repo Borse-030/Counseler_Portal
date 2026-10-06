@@ -6,8 +6,8 @@ import { api } from '../api';
 
 const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const freshSession = () => ({ date: todayIST(), time: '', duration: 60, appointmentType: 'Video Consultation', kind: 'session', purpose: '', meetingLink: '' });
-const label = status => ({ assigned: 'Registration review', submitted: 'Unassigned intake', accepted: 'Registration approved', rejected: 'Rejected', assignment_pending: 'Care match review', matched: 'Care match approved', pending_admin: 'Awaiting admin review' }[status] || status.replaceAll('_', ' '));
-const liveStages = ['discovery_scheduled', 'discovery_completed', 'assignment_pending', 'matched', 'active'];
+const label = status => ({ assigned: 'Admin review', submitted: 'Pending admin review', accepted: 'Registration approved', rejected: 'Rejected', assignment_pending: 'Counselor assignment pending', matched: 'Counselor assigned', pending_admin: 'Legacy session review' }[status] || status.replaceAll('_', ' '));
+const liveStages = ['discovery_scheduled', 'discovery_completed', 'matched', 'active'];
 
 function ScheduleRow({ value, onChange, counselorId, disabled }) {
   const [availability, setAvailability] = useState(null);
@@ -96,69 +96,61 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
   const submit = () => {
     const { kind, request } = dialog;
     if (kind === 'registration') return act(() => api.decideSessionRequest(request.id, { decision: dialog.decision, reason }), true);
-    if (kind === 'sessionReview') return act(() => api.reviewRequestSession(request.id, dialog.appointment.id, { decision: dialog.decision, reason }), true);
-    if (kind === 'assignmentReview') return act(() => api.reviewFinalAssignment(request.id, { decision: dialog.decision, reason }), true);
     if (kind === 'sessions') return act(() => api.scheduleRequestSession(request.id, { sessions }), true);
-    if (kind === 'assignment') return act(() => (request.status === 'discovery_completed' ? api.assignFinalCounselor : api.assignSessionRequest)(request.id, { counselorId, reason }), true);
+    if (kind === 'assignment') return act(() => api.assignFinalCounselor(request.id, { counselorId, reason }), true);
   };
   const filtered = requests.filter(r => (!requestId || requestId === r.id) && (filter === 0 ? ['submitted', 'assigned'].includes(r.status) : filter === 1 ? ['accepted', ...liveStages].includes(r.status) : filter === 2 ? r.status === 'rejected' : true));
   const selectedCounselor = counselors.find(c => c.id === counselorId);
-  const pending = appointments.filter(a => a.status === 'pending_admin');
   return <Stack spacing={2}>
     <Box><Typography variant="h5" fontWeight={700}>BJS care workflow</Typography>
-      <Typography color="text.secondary" variant="body2">Registration review → discovery and notes → counselor assignment → admin session review → sessions, follow-ups and feedback</Typography></Box>
+      <Typography color="text.secondary" variant="body2">Admin registration review → discovery notes → manual counselor assignment → counseling sessions, notes and patient feedback</Typography></Box>
     {error && !dialog && <Alert severity="error">{error}</Alert>}
     {success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
-    {isAdmin && <Alert severity={pending.length ? 'warning' : 'info'}>{pending.length} session proposal{pending.length === 1 ? '' : 's'} awaiting admin review.</Alert>}
     {loading ? <CircularProgress size={24} /> : !filtered.length && <Alert severity="info">
       {isAdmin
         ? 'No registrations in this view.'
-        : filter === 0
-          ? `No pending registration requests are assigned to ${currentUser.name || 'your counselor account'}. Counselors only see requests assigned to them; ask an admin to reassign a request if you should review it.`
+          : filter === 0
+          ? `No sessions or care cases are assigned to ${currentUser.name || 'your counselor account'}.`
           : 'No requests in this view are assigned to your counselor account.'}
     </Alert>}
     {filtered.map(request => {
-      const isOpenPoolRequest = request.assignedById === 'system' || !request.assignedCounselorId;
-      const ownDiscovery = request.assignedCounselorId === currentUser.id && !isOpenPoolRequest;
       const ownCare = request.finalCounselorId === currentUser.id;
-      const reviewable = ['submitted', 'assigned', 'rejected'].includes(request.status);
       const related = appointments.filter(a => a.careRequestId === request.id);
-      const editableNotes = ownDiscovery && ['accepted', 'discovery_scheduled', 'discovery_completed'].includes(request.status);
+      const discoveryCompletedEvent = [...(request.timeline || [])].reverse().find(event => event.status === 'discovery_completed');
+      const editableNotes = isAdmin && ['accepted', 'discovery_scheduled', 'discovery_completed'].includes(request.status);
       const showDiscoveryNotes = ['accepted', 'discovery_scheduled', 'discovery_completed'].includes(request.status) || Boolean(request.discoveryNotes);
       const discoveryNotes = notes[request.id] ?? request.discoveryNotes ?? '';
       return <Card key={request.id} variant="outlined"><CardContent><Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="h6">{request.patientName}</Typography><Chip label={label(request.status)} color={request.status === 'rejected' ? 'error' : 'primary'} size="small" /></Stack>
+        <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="h6">{request.patientName}</Typography><Stack direction="row" spacing={0.75}><Chip label={label(request.status)} color={request.status === 'rejected' ? 'error' : 'primary'} size="small" />{isAdmin && request.status === 'accepted' && <Chip label="Discovery pending" color="warning" size="small" />}{isAdmin && request.status === 'discovery_completed' && <Chip label="Ready to assign" color="success" size="small" />}</Stack></Stack>
         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{request.intakeNotes || 'No additional counseling requirements provided.'}</Typography>
         <Typography variant="body2" color="text.secondary">{request.preferredLanguage || 'Language not specified'} · {request.preferredFormat || 'Format to be confirmed'}</Typography>
-        <Typography variant="body2">Discovery: {isOpenPoolRequest ? 'Awaiting counselor claim' : request.assignedCounselorName || 'Awaiting assignment'} · Ongoing care: {request.finalCounselorName || 'Not assigned yet'}</Typography>
+        <Typography variant="body2">Registration review: {['submitted', 'assigned'].includes(request.status) ? 'Awaiting admin' : request.status === 'rejected' ? 'Declined' : 'Complete'} · Counselor: {request.finalCounselorName || 'Not assigned yet'}</Typography>
         {request.patientMobile && <Button component="a" href={`tel:${request.patientMobile.replace(/[^+\d]/g, '')}`} sx={{ alignSelf: 'flex-start' }}>Call user: {request.patientMobile}</Button>}
         {request.rejectedReason && <Alert severity="error">{request.rejectedReason}</Alert>}
         {!!request.reviews?.length && <Box><Typography variant="subtitle2">Registration reviews</Typography>{request.reviews.map((review, i) => <Typography variant="body2" key={review._id || i}>{review.actorName} ({review.actorRole}) · {review.decision === 'accepted' ? 'Approved' : 'Rejected'} · {new Date(review.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}{review.reason ? ` — ${review.reason}` : ''}</Typography>)}</Box>}
         <Stack direction="row" flexWrap="wrap" gap={1}>
-          {isOpenPoolRequest && ['submitted', 'assigned'].includes(request.status) && !isAdmin && <Button disabled={busy} variant="contained" onClick={() => act(() => api.claimSessionRequest(request.id))}>Take registration for review</Button>}
-          {reviewable && (isAdmin || ownDiscovery) && <>
-            {(request.assignedCounselorId && !isOpenPoolRequest || request.status === 'rejected' && request.assignedCounselorId) && <Button disabled={busy} variant="contained" onClick={() => open('registration', request, { decision: 'accepted' })}>Approve registration</Button>}
+          {isAdmin && ['submitted', 'assigned', 'rejected'].includes(request.status) && <>
+            <Button disabled={busy} variant="contained" onClick={() => open('registration', request, { decision: 'accepted' })}>Approve registration</Button>
             <Button disabled={busy} color="error" onClick={() => open('registration', request, { decision: 'rejected' })}>Reject registration</Button>
           </>}
-          {(isAdmin || ownDiscovery || ownCare) && ['submitted', 'assigned', 'rejected', 'discovery_completed'].includes(request.status) && <Button disabled={busy} variant="outlined" onClick={() => open('assignment', request)}>{request.status === 'discovery_completed' ? 'Assign ongoing counselor' : 'Assign discovery counselor'}</Button>}
-          {isAdmin && request.status === 'assignment_pending' && <><Button disabled={busy} variant="contained" onClick={() => open('assignmentReview', request, { decision: 'approved' })}>Approve care match</Button><Button disabled={busy} color="error" onClick={() => open('assignmentReview', request, { decision: 'rejected' })}>Return for rework</Button></>}
+          {isAdmin && request.status === 'discovery_completed' && <Button disabled={busy} variant="outlined" onClick={() => open('assignment', request)}>Assign counselor</Button>}
         </Stack>
         {showDiscoveryNotes && <Box>
-          {request.status === 'accepted' && editableNotes && <Alert severity="info">Have the discovery conversation whenever it works for you, then record the observations below. No appointment is needed.</Alert>}
-          <TextField fullWidth multiline minRows={3} label="Discovery observations (internal)" value={discoveryNotes} disabled={!editableNotes || busy} onChange={e => setNotes(previous => ({ ...previous, [request.id]: e.target.value }))} />
-          {editableNotes && <Button disabled={busy || !discoveryNotes.trim()} onClick={() => act(() => api.saveDiscoveryNotes(request.id, discoveryNotes))}>{['accepted', 'discovery_scheduled'].includes(request.status) ? 'Save observations and complete discovery' : 'Save discovery observations'}</Button>}
+          {editableNotes && <Alert severity={request.status === 'accepted' ? 'warning' : 'success'}>{request.status === 'accepted' ? 'Discovery call not done yet. When complete, add the notes and mark it done below.' : `Discovery completed${discoveryCompletedEvent?.at ? ` on ${new Date(discoveryCompletedEvent.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}. You can update the notes below.`}</Alert>}
+          <TextField fullWidth multiline minRows={3} label="Discovery call notes (internal)" value={discoveryNotes} disabled={!editableNotes || busy} onChange={e => setNotes(previous => ({ ...previous, [request.id]: e.target.value }))} />
+          {editableNotes && <Button disabled={busy || !discoveryNotes.trim()} onClick={() => act(() => api.saveDiscoveryNotes(request.id, discoveryNotes))}>{request.status === 'accepted' ? 'Save notes & mark discovery done' : 'Update discovery notes'}</Button>}
         </Box>}
-        {request.finalCounselorId && ['matched', 'active'].includes(request.status) && (isAdmin || ownDiscovery || ownCare) && <Button disabled={busy} variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => open('sessions', request)}>Propose sessions / follow-ups</Button>}
+        {request.finalCounselorId && ['matched', 'active'].includes(request.status) && ownCare && <Button disabled={busy} variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => open('sessions', request)}>Schedule sessions / follow-ups</Button>}
         {!!related.length && <Box><Divider sx={{ mb: 1 }} /><Typography variant="subtitle2">Calls, sessions and feedback</Typography>
-          {related.map(appointment => <Box key={appointment.id} sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+        {related.map(appointment => <Box key={appointment.id} sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="body2" fontWeight={600}>{appointment.appointmentKind === 'discovery' ? 'Discovery' : appointment.appointmentKind === 'follow_up' ? 'Follow-up' : 'Session'} · {appointment.date} {appointment.time} IST · {appointment.duration} min</Typography>
             <Typography variant="body2">{appointment.counselorName} · {label(appointment.status)}</Typography>
             {appointment.purpose && <Typography variant="body2">Goal: {appointment.purpose}</Typography>}
             {appointment.reviewReason && <Typography variant="body2">Admin note: {appointment.reviewReason}</Typography>}
-            {appointment.reviewedByName && <Typography variant="caption">Reviewed by {appointment.reviewedByName}</Typography>}
+            {appointment.sessionNotes && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>Session notes: {appointment.sessionNotes}</Typography>}
+            {!!appointment.sessionNoteHistory?.length && <Box component="details" sx={{ mt: 0.5 }}><Typography component="summary" variant="caption" sx={{ cursor: 'pointer' }}>Previous note versions ({appointment.sessionNoteHistory.length})</Typography>{appointment.sessionNoteHistory.map((entry, i) => <Typography key={`${entry.at}-${i}`} variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{new Date(entry.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} · {entry.actorName}: {entry.notes || '(empty note)'}</Typography>)}</Box>}
             {appointment.review?.rating && <Typography variant="body2">Feedback: {appointment.review.rating}/5 — {appointment.review.reviewText || 'No written feedback'}</Typography>}
             <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              {isAdmin && appointment.status === 'pending_admin' && <><Button disabled={busy} size="small" variant="contained" onClick={() => open('sessionReview', request, { appointment, decision: 'approved' })}>Approve session</Button><Button disabled={busy} size="small" color="error" onClick={() => open('sessionReview', request, { appointment, decision: 'rejected' })}>Return session for rework</Button></>}
               {['upcoming', 'completed'].includes(appointment.status) && <Button component={Link} to={`/session/${appointment.id}`} size="small">Open call / notes</Button>}
             </Stack>
           </Box>)}
@@ -168,12 +160,12 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
       </Stack></CardContent></Card>;
     })}
     <Dialog open={!!dialog} onClose={() => !busy && setDialog(null)} fullWidth maxWidth="sm">
-      <DialogTitle>{dialog?.kind === 'registration' ? `${dialog.decision === 'accepted' ? 'Approve' : 'Reject'} registration` : dialog?.kind === 'assignmentReview' ? `${dialog.decision === 'approved' ? 'Approve' : 'Return'} care match` : dialog?.kind === 'sessionReview' ? `${dialog.decision === 'approved' ? 'Approve' : 'Return'} session` : dialog?.kind === 'assignment' ? 'Assign counselor' : 'Propose sessions for admin review'}</DialogTitle>
+      <DialogTitle>{dialog?.kind === 'registration' ? `${dialog.decision === 'accepted' ? 'Approve' : 'Reject'} registration` : dialog?.kind === 'assignment' ? 'Assign counselor' : 'Schedule counseling sessions'}</DialogTitle>
       <DialogContent dividers><Stack spacing={2}>
         {error && <Alert severity="error">{error}</Alert>}
         <Typography variant="subtitle2">{dialog?.request.patientName}</Typography>
-        {['registration', 'sessionReview', 'assignmentReview'].includes(dialog?.kind) && <>
-          <Alert severity="info">{dialog.kind === 'registration' ? 'Either an admin or the assigned counselor can approve. Every review is recorded; a later review updates the decision before discovery begins.' : dialog.kind === 'assignmentReview' ? `Proposed ongoing counselor: ${dialog.request.finalCounselorName}. Approving enables session proposals.` : `${dialog.appointment.date} ${dialog.appointment.time} IST · ${dialog.appointment.counselorName} · ${dialog.appointment.duration} minutes`}</Alert>
+        {dialog?.kind === 'registration' && <>
+          <Alert severity="info">Admin decision is recorded in the care history. Approved patients can proceed to discovery.</Alert>
           <TextField multiline minRows={2} label={dialog.decision === 'rejected' ? 'Reason (required)' : 'Review note (optional)'} value={reason} onChange={e => setReason(e.target.value)} disabled={busy} />
         </>}
         {dialog?.kind === 'assignment' && <>
@@ -187,7 +179,7 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
           <TextField multiline minRows={2} label="Skills match / assignment reason" value={reason} onChange={e => setReason(e.target.value)} disabled={busy} />
         </>}
         {dialog?.kind === 'sessions' && <>
-          {dialog.kind === 'sessions' && <Alert severity="info">All proposed sessions, including follow-ups, require admin approval before confirmation.</Alert>}
+          {dialog.kind === 'sessions' && <Alert severity="info">Sessions are confirmed when saved. The assigned counselor can add notes and mark each session complete afterward.</Alert>}
           {sessions.map((session, index) => <Box key={index}>
             <Typography variant="subtitle2">Session {index + 1}</Typography>
             <ScheduleRow value={session} disabled={busy} counselorId={dialog.request.finalCounselorId} onChange={value => setSessions(previous => previous.map((item, i) => i === index ? value : item))} />
@@ -197,7 +189,7 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
           {dialog.kind === 'sessions' && <Button disabled={busy || sessions.length >= 12} onClick={() => setSessions(previous => [...previous, freshSession()])}>Add another session</Button>}
         </>}
       </Stack></DialogContent>
-      <DialogActions><Button disabled={busy} onClick={() => setDialog(null)}>Cancel</Button><Button variant="contained" onClick={submit} disabled={busy || (dialog?.decision === 'rejected' && !reason.trim()) || (dialog?.kind === 'assignment' && !counselorId) || (dialog?.kind === 'sessions' && sessions.some(s => !s.date || !s.time))}>{busy ? 'Saving…' : dialog?.kind === 'sessions' ? 'Send to admin' : 'Confirm'}</Button></DialogActions>
+      <DialogActions><Button disabled={busy} onClick={() => setDialog(null)}>Cancel</Button><Button variant="contained" onClick={submit} disabled={busy || (dialog?.decision === 'rejected' && !reason.trim()) || (dialog?.kind === 'assignment' && !counselorId) || (dialog?.kind === 'sessions' && sessions.some(s => !s.date || !s.time))}>{busy ? 'Saving…' : dialog?.kind === 'sessions' ? 'Confirm schedule' : 'Confirm'}</Button></DialogActions>
     </Dialog>
   </Stack>;
 }

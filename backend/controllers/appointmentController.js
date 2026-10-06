@@ -348,6 +348,11 @@ export const updateAppointment = async (req, res) => {
       if (!isAssignedCounselor) {
         return res.status(403).json({ message: 'Only the counselor can update clinical session notes.' });
       }
+      if (typeof sessionNotes !== 'string' || sessionNotes.length > 20000) {
+        return res.status(400).json({ message: 'Session notes must be under 20,000 characters.' });
+      }
+      if (!Array.isArray(apt.sessionNoteHistory)) apt.sessionNoteHistory = [];
+      apt.sessionNoteHistory.push({ notes: apt.sessionNotes || '', actorId: actor.id, actorName: actor.name, at: new Date() });
       apt.sessionNotes = sessionNotes;
     }
 

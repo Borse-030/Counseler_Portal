@@ -23,15 +23,11 @@ export const createCareRequest = async (patient, {
       timeline: [{ status: 'submitted', actorId: patient.id, actorName: patient.name, note: 'Patient submitted an intake request.' }],
     });
 
-    const [admins, counselors] = await Promise.all([
-      User.find({ role: 'admin', suspended: { $ne: true } }),
-      User.find({ role: 'counselor', approved: true, suspended: { $ne: true } }),
-    ]);
+    const admins = await User.find({ role: 'admin', suspended: { $ne: true } });
     await careRequest.save();
     const notifications = [
-      ...admins.map(admin => sendNotification(admin.id, `New registration request from ${patient.name} is ready for counselor assignment or review.`)),
-      ...counselors.map(counselor => sendNotification(counselor.id, `A new registration request from ${patient.name} is available in the unassigned intake queue.`)),
-      sendNotification(patient.id, 'Your registration request has been received and is waiting for a counselor to review it.'),
+      ...admins.map(admin => sendNotification(admin.id, `New registration request from ${patient.name} is ready for review.`)),
+      sendNotification(patient.id, 'Your registration request has been received and is waiting for admin review.'),
     ];
     // Notification delivery must not turn a saved request into a failed registration.
     await Promise.allSettled(notifications);

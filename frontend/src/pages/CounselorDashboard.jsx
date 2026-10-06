@@ -347,9 +347,9 @@ export default function CounselorDashboard({ currentUser }) {
   // Calculations
   const upcomingSessions = appointments.filter(a => a.status === 'upcoming');
   const pastSessions = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
-  const pendingReviewRequests = careRequests.filter((request) => ['submitted', 'assigned'].includes(request.status));
-  const approvedRequests = careRequests.filter((request) => ['accepted', 'discovery_scheduled', 'discovery_completed', 'active'].includes(request.status));
-  const declinedRequests = careRequests.filter((request) => request.assignedCounselorId === currentUser.id && request.status === 'rejected');
+  const pendingReviewRequests = careRequests.filter((request) => request.finalCounselorId === currentUser.id && ['matched', 'active'].includes(request.status));
+  const approvedRequests = pendingReviewRequests;
+  const declinedRequests = careRequests.filter((request) => request.finalCounselorId === currentUser.id && request.status === 'closed');
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
@@ -508,7 +508,7 @@ export default function CounselorDashboard({ currentUser }) {
               </Box>
               <Box>
                 <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                  Intake Requests
+                  Assigned Care Cases
                 </Typography>
                 <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, lineHeight: 1.1 }}>
                   {pendingReviewRequests.length}
@@ -549,13 +549,13 @@ export default function CounselorDashboard({ currentUser }) {
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>User management</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                   <Button fullWidth variant={requestTab === 0 ? 'contained' : 'text'} sx={{ justifyContent: 'space-between' }} onClick={() => { setRequestTab(0); document.getElementById('care-requests')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                    Pending review <Chip size="small" label={pendingReviewRequests.length} />
+                    Assigned cases <Chip size="small" label={pendingReviewRequests.length} />
                   </Button>
                   <Button fullWidth variant={requestTab === 1 ? 'contained' : 'text'} sx={{ justifyContent: 'space-between' }} onClick={() => { setRequestTab(1); document.getElementById('care-requests')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                    Approved users <Chip size="small" label={approvedRequests.length} />
+                    Active care <Chip size="small" label={approvedRequests.length} />
                   </Button>
                   <Button fullWidth variant={requestTab === 2 ? 'contained' : 'text'} sx={{ justifyContent: 'space-between' }} onClick={() => { setRequestTab(2); document.getElementById('care-requests')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                    Declined <Chip size="small" label={declinedRequests.length} />
+                    Closed cases <Chip size="small" label={declinedRequests.length} />
                   </Button>
                   <Divider sx={{ my: 1 }} />
                   <Button fullWidth variant="text" sx={{ justifyContent: 'flex-start' }} onClick={() => document.getElementById('upcoming-sessions')?.scrollIntoView({ behavior: 'smooth' })}>

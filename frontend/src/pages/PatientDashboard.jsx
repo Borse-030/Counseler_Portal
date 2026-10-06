@@ -295,7 +295,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
       </Box>
 
       {appointments.some(apt => apt.status === 'pending_admin') && <Alert severity="info" sx={{ mb: 2 }}>
-        {appointments.filter(apt => apt.status === 'pending_admin').length} proposed session(s) are awaiting BJS admin review. They are not confirmed yet.
+        {appointments.filter(apt => apt.status === 'pending_admin').length} legacy session proposal(s) are awaiting BJS admin review. They are not confirmed yet.
       </Alert>}
       {activeTab === 0 && (
         <Grid container spacing={2.5} sx={{ alignItems: 'flex-start' }}>
@@ -406,7 +406,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                   <CheckCircleIcon color="success" />
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>No requests waiting for review</Typography>
-                    <Typography variant="body2" color="text.secondary">Registration requests enter an unassigned review queue. A counselor claims the request or an admin assigns one.</Typography>
+                    <Typography variant="body2" color="text.secondary">Registration requests are sent to the admin team for approval. A counselor is assigned after the discovery conversation.</Typography>
                   </Box>
                 </Paper>
               ) : (
@@ -424,7 +424,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                     }[careRequest.status] ?? 0;
                     const requestStatusLabel = {
                       submitted: 'Submitted',
-                      assigned: 'Counselor review',
+                      assigned: 'Waiting for admin review',
                       rejected: 'Registration rejected',
                       accepted: 'Registration approved · discovery conversation can happen anytime',
                       discovery_scheduled: 'Discovery scheduled',

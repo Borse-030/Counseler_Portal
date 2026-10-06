@@ -11,9 +11,7 @@ const canViewRequest = (request, user) => (
   (patientRoles.includes(user.role) && request.patientId === user.id) ||
   (user.role === 'counselor' && user.approved === true && (
     request.assignedCounselorId === user.id ||
-    request.finalCounselorId === user.id ||
-    ((request.status === 'submitted' && !request.assignedCounselorId) ||
-      (request.status === 'assigned' && request.assignedById === 'system'))
+    request.finalCounselorId === user.id
   ))
 );
 
@@ -196,8 +194,6 @@ export const getRequests = async (req, res) => {
           ? { $or: [
             { assignedCounselorId: req.user.id },
             { finalCounselorId: req.user.id },
-            { status: 'submitted', assignedCounselorId: { $in: ['', null] } },
-            { status: 'assigned', assignedById: 'system' },
           ] }
           : null;
     if (!filter) return res.status(403).json({ message: 'Forbidden.' });
@@ -222,17 +218,13 @@ export const getRequestById = async (req, res) => {
 
 export const assignCounselor = async (req, res) => {
   const { counselorId, reason = '' } = req.body;
-  if (!['admin', 'counselor'].includes(req.user.role)) return res.status(403).json({ message: 'Staff access required.' });
-  if (req.user.role === 'counselor' && req.user.approved !== true) return res.status(403).json({ message: 'Counselor approval is required.' });
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
 
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
-    if (req.user.role === 'counselor' && req.user.id !== careRequest.assignedCounselorId) {
-      return res.status(403).json({ message: 'Only the currently assigned counselor can reassign this request.' });
-    }
-    if (!['submitted', 'assigned', 'rejected'].includes(careRequest.status)) {
-      return res.status(409).json({ message: 'This request can no longer be assigned.' });
+    if (!['discovery_completed', 'matched', 'active'].includes(careRequest.status)) {
+      return res.status(409).json({ message: 'Approve registration and record discovery observations before assigning a counselor.' });
     }
     const counselor = await User.findOne({ id: counselorId, role: 'counselor', approved: true, suspended: { $ne: true } });
     if (!counselor) return res.status(404).json({ message: 'Approved counselor not found.' });
@@ -246,72 +238,18 @@ export const assignCounselor = async (req, res) => {
       counselorName: counselor.name,
       assignedById: req.user.id,
       assignedByName: req.user.name,
-      stage: 'review',
+      stage: 'care',
       reason: String(reason).slice(0, 1000),
       at: new Date()
     });
-    addTimeline(careRequest, 'assigned', req.user, `Assigned to ${counselor.name}.`);
+    careRequest.finalCounselorId = counselor.id;
+    careRequest.finalCounselorName = counselor.name;
+    addTimeline(careRequest, 'matched', req.user, `Admin assigned ongoing counselor ${counselor.name}.`);
     await careRequest.save();
 
-    await sendNotification(counselor.id, `A new intake request from ${careRequest.patientName} has been assigned to you.`);
-    await sendNotification(careRequest.patientId, 'A counselor has been assigned to review your request.');
+    await sendNotification(counselor.id, `You have been assigned as the counselor for ${careRequest.patientName}.`);
+    await sendNotification(careRequest.patientId, `${counselor.name} has been assigned as your counselor.`);
     res.json({ message: 'Counselor assigned.', request: careRequest });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const claimRequest = async (req, res) => {
-  if (req.user.role !== 'counselor' || req.user.approved !== true) {
-    return res.status(403).json({ message: 'Only an approved counselor can claim an intake request.' });
-  }
-
-  try {
-    const now = new Date();
-    const request = await CareRequest.findOneAndUpdate(
-      {
-        id: req.params.id,
-        $or: [
-          { status: 'submitted', assignedCounselorId: { $in: ['', null] } },
-          { status: 'assigned', assignedById: 'system' },
-        ],
-      },
-      {
-        $set: {
-          assignedCounselorId: req.user.id,
-          assignedCounselorName: req.user.name,
-          assignedById: req.user.id,
-          assignedByName: req.user.name,
-          status: 'assigned',
-          rejectedReason: '',
-        },
-        $push: {
-          assignmentHistory: {
-            counselorId: req.user.id,
-            counselorName: req.user.name,
-            assignedById: req.user.id,
-            assignedByName: req.user.name,
-            stage: 'review',
-            reason: 'Claimed from the unassigned registration queue.',
-            at: now,
-          },
-          timeline: {
-            status: 'assigned',
-            actorId: req.user.id,
-            actorName: req.user.name,
-            note: `${req.user.name} claimed this registration for review.`,
-            at: now,
-          },
-        },
-      },
-      { new: true, runValidators: true },
-    );
-    if (!request) {
-      return res.status(409).json({ message: 'This request has already been claimed or is no longer awaiting review.' });
-    }
-
-    await sendNotification(request.patientId, `${req.user.name} has claimed your registration request and will review it shortly.`);
-    res.json({ message: 'Registration request claimed.', request });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -319,22 +257,12 @@ export const claimRequest = async (req, res) => {
 
 export const handleDecision = async (req, res) => {
   const { decision, reason = '' } = req.body;
-  if (!['counselor', 'admin'].includes(req.user.role)) return res.status(403).json({ message: 'Staff access required.' });
-  if (req.user.role === 'counselor' && req.user.approved !== true) return res.status(403).json({ message: 'Counselor approval is required.' });
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
   if (!['accepted', 'rejected'].includes(decision)) return res.status(400).json({ message: 'Choose accept or reject.' });
 
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
-    if (req.user.role === 'counselor' && careRequest.assignedCounselorId !== req.user.id) {
-      return res.status(403).json({ message: 'Only the assigned counselor can review this registration.' });
-    }
-    if (req.user.role === 'counselor' && careRequest.assignedById === 'system') {
-      return res.status(409).json({ message: 'Claim this request from the unassigned queue before reviewing it.' });
-    }
-    if (decision === 'accepted' && (!careRequest.assignedCounselorId || careRequest.assignedById === 'system')) {
-      return res.status(409).json({ message: 'Assign or claim a counselor before approving this registration.' });
-    }
     if (!['submitted', 'assigned', 'rejected'].includes(careRequest.status)) return res.status(409).json({ message: 'This request has already moved past registration review.' });
     if (decision === 'rejected' && !String(reason).trim()) return res.status(400).json({ message: 'Add a brief reason so the care team can reassign the request.' });
 
@@ -358,7 +286,7 @@ export const handleDecision = async (req, res) => {
     }
     await sendNotification(careRequest.patientId, decision === 'accepted'
       ? `${req.user.name} approved your registration. You can now have a discovery conversation and your counselor will record observations.`
-      : 'The assigned counselor is unavailable for this request. The care team will review reassignment.');
+      : 'Your registration request was declined. Please contact the care team if you need help.');
     if (careRequest.assignedById && careRequest.assignedById !== 'system' && careRequest.assignedById !== req.user.id) {
       await sendNotification(careRequest.assignedById, `${req.user.name} ${decision} the request from ${careRequest.patientName}.`);
     }
@@ -370,12 +298,12 @@ export const handleDecision = async (req, res) => {
 
 export const updateDiscoveryNotes = async (req, res) => {
   const { notes } = req.body;
-  if (req.user.role !== 'counselor' || req.user.approved !== true) return res.status(403).json({ message: 'Approved counselor access required.' });
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
   if (typeof notes !== 'string' || notes.length > 10000) return res.status(400).json({ message: 'Discovery notes must be under 10,000 characters.' });
   if (!notes.trim()) return res.status(400).json({ message: 'Add observations before marking discovery complete.' });
 
   try {
-    const careRequest = await CareRequest.findOne({ id: req.params.id, assignedCounselorId: req.user.id });
+    const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Assigned care request not found.' });
     if (!['accepted', 'discovery_scheduled', 'discovery_completed'].includes(careRequest.status)) {
       return res.status(409).json({ message: 'Approve the registration before recording discovery observations.' });
@@ -396,7 +324,7 @@ export const updateDiscoveryNotes = async (req, res) => {
     });
     await careRequest.save();
     res.json({
-      message: completedDiscovery ? 'Discovery observations saved. You can now propose an ongoing counselor match.' : 'Discovery observations saved.',
+      message: completedDiscovery ? 'Discovery observations saved. You can now assign a counselor.' : 'Discovery observations saved.',
       request: careRequest,
     });
   } catch (error) {
@@ -406,15 +334,12 @@ export const updateDiscoveryNotes = async (req, res) => {
 
 export const assignFinalCounselor = async (req, res) => {
   const { counselorId, reason = '' } = req.body;
-  if (!['admin', 'counselor'].includes(req.user.role)) return res.status(403).json({ message: 'Staff access required.' });
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
 
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
-    if (req.user.role === 'counselor' && careRequest.assignedCounselorId !== req.user.id) {
-      return res.status(403).json({ message: 'Only the discovery counselor can make the final care assignment.' });
-    }
-    if (careRequest.status !== 'discovery_completed' || !careRequest.discoveryNotes.trim()) {
+    if (!['discovery_completed', 'matched', 'active'].includes(careRequest.status) || !careRequest.discoveryNotes.trim()) {
       return res.status(409).json({ message: 'Complete the discovery call and record its notes before assigning ongoing care.' });
     }
 
@@ -431,128 +356,26 @@ export const assignFinalCounselor = async (req, res) => {
       reason: String(reason).slice(0, 1000),
       at: new Date()
     });
-    addTimeline(careRequest, 'assignment_pending', req.user, `Ongoing counselor assignment proposed: ${counselor.name}. Awaiting admin review.`);
+    addTimeline(careRequest, 'matched', req.user, `Admin assigned ongoing counselor ${counselor.name}.`);
     await careRequest.save();
-    await sendNotification(careRequest.patientId, 'Your counselor has proposed an ongoing-care match. It is awaiting care-team review.');
-    await sendNotification(counselor.id, `You have been proposed as the ongoing counselor for ${careRequest.patientName}. Assignment is awaiting admin review.`);
-    const admins = await User.find({ role: 'admin', suspended: { $ne: true } });
-    await Promise.allSettled(admins.map(admin => sendNotification(admin.id, `Ongoing counselor assignment for ${careRequest.patientName} needs review.`)));
-    res.json({ message: 'Ongoing counselor assignment sent for admin review.', request: careRequest });
+    await sendNotification(careRequest.patientId, `Your counselor, ${counselor.name}, has been assigned.`);
+    await sendNotification(counselor.id, `You have been assigned as the counselor for ${careRequest.patientName}.`);
+    res.json({ message: 'Counselor assigned.', request: careRequest });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-export const reviewFinalAssignment = async (req, res) => {
-  const { decision, reason = '' } = req.body;
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
-  if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ message: 'Choose approve or reject.' });
-  if (decision === 'rejected' && !String(reason).trim()) return res.status(400).json({ message: 'Add a reason for rework.' });
-
-  try {
-    const careRequest = await CareRequest.findOne({ id: req.params.id });
-    if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
-    if (careRequest.status !== 'assignment_pending' || !careRequest.finalCounselorId) {
-      return res.status(409).json({ message: 'There is no ongoing counselor assignment awaiting review.' });
-    }
-
-    const proposedCounselorId = careRequest.finalCounselorId;
-    const proposedCounselorName = careRequest.finalCounselorName;
-    if (decision === 'rejected') {
-      careRequest.finalCounselorId = '';
-      careRequest.finalCounselorName = '';
-      addTimeline(careRequest, 'discovery_completed', req.user, `Assignment returned for rework: ${String(reason).trim().slice(0, 1000)}`);
-    } else {
-      addTimeline(careRequest, 'matched', req.user, `Ongoing counselor assignment approved: ${proposedCounselorName}.`);
-    }
-    await careRequest.save();
-    const notifications = [
-      sendNotification(careRequest.patientId, decision === 'approved'
-        ? `Your ongoing counselor, ${proposedCounselorName}, has been approved.`
-        : 'Your care team is reviewing another counselor match.'),
-      sendNotification(proposedCounselorId, decision === 'approved'
-        ? `Admin approved your ongoing counselor assignment for ${careRequest.patientName}.`
-        : `Admin returned your ongoing counselor assignment for ${careRequest.patientName}: ${String(reason).trim().slice(0, 1000)}`),
-    ];
-    if (careRequest.assignedCounselorId !== proposedCounselorId) {
-      notifications.push(sendNotification(careRequest.assignedCounselorId, decision === 'approved'
-        ? `Admin approved the ongoing care match for ${careRequest.patientName}.`
-        : `Admin returned the ongoing care match for ${careRequest.patientName}: ${String(reason).trim().slice(0, 1000)}`));
-    }
-    await Promise.allSettled(notifications);
-    res.json({ message: decision === 'approved' ? 'Ongoing counselor assignment approved.' : 'Assignment returned for rework.', request: careRequest });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const reviewRequestSession = async (req, res) => {
-  const { decision, reason = '' } = req.body;
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
-  if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ message: 'Choose approve or reject.' });
-  if (decision === 'rejected' && !String(reason).trim()) return res.status(400).json({ message: 'Add a reason for session rework.' });
-
-  try {
-    const [careRequest, appointment] = await Promise.all([
-      CareRequest.findOne({ id: req.params.id }),
-      Appointment.findOne({ id: req.params.appointmentId, careRequestId: req.params.id }),
-    ]);
-    if (!careRequest || !appointment) return res.status(404).json({ message: 'Care request or proposed session not found.' });
-    if (appointment.status !== 'pending_admin') return res.status(409).json({ message: 'This session proposal has already been reviewed.' });
-
-    appointment.status = decision === 'approved' ? 'upcoming' : 'rejected';
-    appointment.reviewReason = String(reason).trim().slice(0, 1000);
-    appointment.reviewedById = req.user.id;
-    appointment.reviewedByName = req.user.name;
-    appointment.reviewedAt = new Date();
-    await appointment.save();
-    if (decision === 'approved') {
-      if (careRequest.status === 'matched' || careRequest.status === 'discovery_completed') {
-        careRequest.status = 'active';
-      }
-      careRequest.timeline.push({
-        status: careRequest.status,
-        actorId: req.user.id,
-        actorName: req.user.name,
-        note: `Session proposal for ${appointment.date} at ${appointment.time} approved.`,
-        at: new Date(),
-      });
-    } else {
-      careRequest.timeline.push({
-        status: careRequest.status,
-        actorId: req.user.id,
-        actorName: req.user.name,
-        note: `Session proposal returned for rework: ${appointment.reviewReason}`,
-        at: new Date(),
-      });
-    }
-    await careRequest.save();
-    await sendNotification(careRequest.patientId, decision === 'approved'
-      ? `Your counseling session for ${appointment.date} at ${appointment.time} is confirmed.`
-      : `A proposed session for ${appointment.date} at ${appointment.time} needs to be rescheduled: ${appointment.reviewReason}`);
-    await sendNotification(appointment.counselorId, decision === 'approved'
-      ? `Admin approved your session with ${careRequest.patientName} for ${appointment.date} at ${appointment.time}.`
-      : `Admin returned your session proposal with ${careRequest.patientName} for rework: ${appointment.reviewReason}`);
-    res.json({ message: decision === 'approved' ? 'Session approved and confirmed.' : 'Session returned for rework.', appointment, request: careRequest });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-/*
- * Session proposals are staged and reviewed by an administrator before they
- * become visible as confirmed appointments.
- */
 export const scheduleSession = async (req, res) => {
   const { sessions: submittedSessions, date, time, appointmentType = 'Video Consultation', purpose = '', kind = 'session' } = req.body;
-  if (!['admin', 'counselor'].includes(req.user.role)) return res.status(403).json({ message: 'Staff access required.' });
+  if (req.user.role !== 'counselor' || req.user.approved !== true) return res.status(403).json({ message: 'Approved counselor access required.' });
 
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
     if (!careRequest) return res.status(404).json({ message: 'Care request not found.' });
     if (!careRequest.finalCounselorId) return res.status(409).json({ message: 'Assign an ongoing-care counselor before scheduling a session.' });
-    if (req.user.role === 'counselor' && careRequest.finalCounselorId !== req.user.id) return res.status(403).json({ message: 'This care plan is assigned to another counselor.' });
-    if (!['matched', 'active'].includes(careRequest.status)) return res.status(409).json({ message: 'Admin approval of the ongoing counselor assignment is required before proposing sessions.' });
+    if (careRequest.finalCounselorId !== req.user.id) return res.status(403).json({ message: 'This care plan is assigned to another counselor.' });
+    if (!['matched', 'active'].includes(careRequest.status)) return res.status(409).json({ message: 'The care case is not ready for sessions.' });
 
     const proposed = Array.isArray(submittedSessions) ? submittedSessions : [{ date, time, appointmentType, purpose, kind }];
     if (!proposed.length || proposed.length > 12) return res.status(400).json({ message: 'Propose between one and twelve sessions at a time.' });
@@ -587,13 +410,11 @@ export const scheduleSession = async (req, res) => {
       appointments.push(await createAppointmentForRequest(careRequest, req.user, {
         ...item,
         kind: item.kind,
-        status: 'pending_admin',
+        status: 'upcoming',
       }));
     }
-    await sendNotification(careRequest.patientId, `${appointments.length} counseling session proposal(s) are awaiting admin review.`);
-    const admins = await User.find({ role: 'admin', suspended: { $ne: true } });
-    await Promise.allSettled(admins.map(admin => sendNotification(admin.id, `${appointments.length} session proposal(s) for ${careRequest.patientName} need review.`)));
-    res.status(201).json({ message: 'Session proposal(s) sent for admin review.', appointments, request: careRequest });
+    await sendNotification(careRequest.patientId, `${appointments.length} counseling session(s) have been scheduled.`);
+    res.status(201).json({ message: 'Session(s) scheduled.', appointments, request: careRequest });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
