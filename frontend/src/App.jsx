@@ -30,6 +30,7 @@ import PatientDashboard from './pages/PatientDashboard';
 import CounselorDashboard from './pages/CounselorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SessionRoom from './pages/SessionRoom';
+import LandingPage2 from './pages/LandingPage/LandingPage2';
 import Register from './pages/Register';
 
 const validateMobile = (num) => {
@@ -549,9 +550,19 @@ function AppContent() {
             path="/"
             element={
               <LandingPage
-                onAuthRedirect={handleOpenSignIn}
-                onOpenRegisterAuth={handleOpenRegister}
-                currentUser={currentUser}
+                // onAuthRedirect={handleOpenSignIn}
+                // onOpenRegisterAuth={handleOpenRegister}
+                // currentUser={currentUser}
+              />
+            }
+          />
+          <Route
+            path="/lp2"
+            element={
+              <LandingPage2
+                // onAuthRedirect={handleOpenSignIn}
+                // onOpenRegisterAuth={handleOpenRegister}
+                // currentUser={currentUser}
               />
             }
           />

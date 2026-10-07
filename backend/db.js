@@ -1,6 +1,6 @@
 import './env.js';
 import mongoose from 'mongoose';
-
+ 
 export {
   Appointment,
   AppointmentType,
@@ -16,17 +16,17 @@ export {
   User
 } from './models/index.js';
 import dotenv from 'dotenv';
-
+ 
 export async function connectDB() {
   const uri = process.env.MONGODB_URI?.trim();
   if (!uri) {
     throw new Error('MONGODB_URI is required. Set it in backend/.env or the process environment.');
   }
-
+ 
   await mongoose.connect(uri);
   console.log('Connected to MongoDB');
 }
-
+ 
 export const db = {
   reset: async () => {
     const collections = Object.keys(mongoose.connection.collections);
@@ -37,3 +37,5 @@ export const db = {
     return { cleared: true };
   }
 };
+ 
+ 

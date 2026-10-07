@@ -337,7 +337,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         <Tabs value={activeTab} onChange={(event, value) => setActiveTab(value)} variant="scrollable" allowScrollButtonsMobile>
           <Tab label={`Upcoming & active ${requestedApts.length + upcomingApts.length}`} sx={{ fontWeight: 600 }} />
           <Tab label={`Past journey ${pastApts.length}`} sx={{ fontWeight: 600 }} />
-          <Tab label="Care plan & notes" sx={{ fontWeight: 600 }} />
+          {/* <Tab label="Care plan & notes" sx={{ fontWeight: 600 }} /> */}
           <Tab label="Confirmations" sx={{ fontWeight: 600 }} />
         </Tabs>
       </Box>
@@ -356,7 +356,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                 </Box>
                 <Chip label={`${upcomingApts.length} scheduled`} size="small" color={upcomingApts.length ? 'success' : 'default'} />
               </Box>
-              {upcomingApts.length === 0 ? (
+              {/* {upcomingApts.length === 0 ? (
                 <Paper sx={{ p: { xs: 2.5, md: 3 }, display: 'flex', alignItems: 'center', gap: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                   <Box sx={{ width: 54, height: 54, flex: '0 0 auto', display: 'grid', placeItems: 'center', borderRadius: 2, bgcolor: 'primary.light', color: 'primary.dark' }}>
                     <CalendarMonthIcon />
@@ -436,7 +436,380 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                     );
                   })}
                 </Grid>
+              )} */}
+
+              {upcomingApts.length === 0 ? (
+                <Paper
+                  sx={{
+                    p: { xs: 2.5, md: 3 },
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 54,
+                      height: 54,
+                      flex: '0 0 auto',
+                      display: 'grid',
+                      placeItems: 'center',
+                      borderRadius: 2,
+                      bgcolor: 'primary.light',
+                      color: 'primary.dark',
+                    }}
+                  >
+                    <CalendarMonthIcon />
+                  </Box>
+
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      No confirmed sessions yet
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary">
+                      Your next session will appear here with its time and joining details.
+                    </Typography>
+                  </Box>
+
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => navigate('/')}
+                  >
+                    Request a session
+                  </Button>
+                </Paper>
+              ) : (
+                <Stack spacing={2}>
+                  {upcomingApts.map((apt, index) => {
+                    const sessionDate = getAppointmentDateParts(apt.date);
+
+                    const isDiscovery = apt.appointmentKind === 'discovery';
+                    const isOnline = apt.appointmentType !== 'In-Person Consultation';
+
+                    const sessionLabel = isDiscovery
+                      ? 'Discovery call'
+                      : index === 0
+                        ? 'Next session'
+                        : 'Confirmed';
+
+                    return (
+                      <Card
+                        key={apt.id}
+                        sx={{
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 2,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        }}
+                      >
+                        <CardContent
+                          sx={{
+                            p: { xs: 2, md: 2.25 },
+                            '&:last-child': {
+                              pb: { xs: 2, md: 2.25 },
+                            },
+                          }}
+                        >
+                          {/* TOP ROW */}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 1,
+                              mb: 1.5,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              spacing={0.75}
+                              sx={{
+                                flexWrap: 'wrap',
+                                rowGap: 0.75,
+                              }}
+                            >
+                              <Chip
+                                label={sessionLabel}
+                                size="small"
+                                color={isDiscovery ? 'info' : 'success'}
+                              />
+
+                              <Chip
+                                label="Assigned by care team"
+                                size="small"
+                                variant="outlined"
+                              />
+
+                              <Chip
+                                label={isOnline ? 'Online' : 'Offline'}
+                                size="small"
+                                sx={{
+                                  bgcolor: isOnline
+                                    ? 'primary.50'
+                                    : 'action.hover',
+                                  color: isOnline
+                                    ? 'primary.main'
+                                    : 'text.secondary',
+                                  border: 'none',
+                                }}
+                              />
+                            </Stack>
+                          </Box>
+
+                          {/* MAIN CONTENT */}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              flexWrap: { xs: 'wrap', md: 'nowrap' },
+                            }}
+                          >
+                            {/* DATE */}
+                            <Box
+                              sx={{
+                                width: 58,
+                                height: 74,
+                                flex: '0 0 auto',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: 2,
+                                bgcolor: index === 0
+                                  ? 'primary.light'
+                                  : 'action.hover',
+                                color: index === 0
+                                  ? 'primary.dark'
+                                  : 'text.primary',
+                              }}
+                            >
+                              <Typography
+                                variant="overline"
+                                sx={{
+                                  fontWeight: 700,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {sessionDate.month}
+                              </Typography>
+
+                              <Typography
+                                variant="h5"
+                                sx={{
+                                  fontWeight: 800,
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {sessionDate.day}
+                              </Typography>
+
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 500,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {sessionDate.weekday}
+                              </Typography>
+                            </Box>
+
+                            {/* COUNSELLOR + SESSION INFO */}
+                            <Box
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1.25,
+                                }}
+                              >
+                                <Avatar
+                                  sx={{
+                                    width: 40,
+                                    height: 40,
+                                    bgcolor: 'primary.light',
+                                    color: 'primary.dark',
+                                  }}
+                                >
+                                  {apt.counselorName?.charAt(0) || (
+                                    <SelfImprovementIcon />
+                                  )}
+                                </Avatar>
+
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography
+                                    variant="subtitle1"
+                                    sx={{
+                                      fontWeight: 700,
+                                      lineHeight: 1.3,
+                                    }}
+                                    noWrap
+                                  >
+                                    {apt.counselorName || 'Counsellor'}
+                                  </Typography>
+
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    noWrap
+                                  >
+                                    {apt.counselorSpecialty || 'Counselling Specialist'}
+                                  </Typography>
+                                </Box>
+                              </Box>
+
+                              {/* TIME + MODE */}
+                              <Stack
+                                direction="row"
+                                spacing={1.25}
+                                alignItems="center"
+                                sx={{
+                                  mt: 1.25,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.75,
+                                  }}
+                                >
+                                  <AccessTimeIcon
+                                    sx={{
+                                      fontSize: 17,
+                                      color: 'primary.main',
+                                    }}
+                                  />
+
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ fontWeight: 700 }}
+                                  >
+                                    {apt.time || 'Time to be confirmed'}
+                                  </Typography>
+                                </Box>
+
+                                {apt.duration && (
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    • {apt.duration} min
+                                  </Typography>
+                                )}
+
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  • {isOnline ? 'Telehealth' : 'In-person'}
+                                </Typography>
+                              </Stack>
+
+                              {/* AGENDA */}
+                              {apt.agenda && (
+                                <Box
+                                  sx={{
+                                    mt: 1.25,
+                                    px: 1.25,
+                                    py: 0.75,
+                                    bgcolor: 'action.hover',
+                                    borderRadius: 1.5,
+                                  }}
+                                >
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    <Box
+                                      component="span"
+                                      sx={{
+                                        fontWeight: 700,
+                                        color: 'text.primary',
+                                      }}
+                                    >
+                                      Agenda:
+                                    </Box>{' '}
+                                    {apt.agenda}
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+
+                            {/* ACTIONS */}
+                            <Box
+                              sx={{
+                                width: { xs: '100%', md: 190 },
+                                flex: '0 0 auto',
+                                display: 'flex',
+                                gap: 1,
+                                flexDirection: { xs: 'row', md: 'column' },
+                              }}
+                            >
+                              {!apt.isDemo &&
+                                apt.appointmentType !== 'In-Person Consultation' ? (
+                                <Button
+                                  variant="contained"
+                                  fullWidth
+                                  startIcon={<VideoCallIcon />}
+                                  onClick={() => handleJoinSession(apt.id)}
+                                  sx={{
+                                    flex: 1,
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  Join Video Consultation
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="contained"
+                                  fullWidth
+                                  disabled
+                                  sx={{
+                                    flex: 1,
+                                    textTransform: 'none',
+                                  }}
+                                >
+                                  {apt.isDemo ? 'Sample Session' : 'View Location'}
+                                </Button>
+                              )}
+
+                              <Button
+                                variant="outlined"
+                                fullWidth
+                                startIcon={<DescriptionOutlinedIcon />}
+                                sx={{
+                                  flex: 1,
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                Agenda & Notes
+                              </Button>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </Stack>
               )}
+
             </Box>
 
             <Box id="pending-requests" sx={{ scrollMarginTop: 96 }}>
