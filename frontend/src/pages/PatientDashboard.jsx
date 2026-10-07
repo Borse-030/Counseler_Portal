@@ -15,6 +15,7 @@ import StarIcon from '@mui/icons-material/Star';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
 import { api } from '../api';
+import AttendSessionButton from '../components/AttendSessionButton';
 
 const getAppointmentDateParts = (dateValue) => {
   const parsedDate = dateValue ? new Date(dateValue) : null;
@@ -176,10 +177,6 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
     setReceiptOpen(false);
   };
 
-  // Helper to join virtual session room
-  const handleJoinSession = (aptId) => {
-    navigate(`/session/${aptId}`);
-  };
 
   const handleOpenProfile = () => {
     setProfileDraft({
@@ -426,12 +423,10 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                                 ) : apt.appointmentType === 'In-Person Consultation' ? (
                                   <Box>
                                     <Typography variant="caption" color="text.secondary">MEETING LOCATION</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.clinicAddress || 'Address shared after confirmation'}</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>HO</Typography>
                                   </Box>
                                 ) : (
-                                  <Button variant="contained" fullWidth startIcon={<VideoCallIcon />} onClick={() => handleJoinSession(apt.id)}>
-                                    Enter video room
-                                  </Button>
+                                  <AttendSessionButton variant="contained" fullWidth startIcon={<VideoCallIcon />} appointment={apt} />
                                 )}
                               </Box>
                             </Box>

@@ -190,8 +190,6 @@ export const api = {
     return request(`/counselors/${id}/slots?${params}`);
   },
 
-  getCounselorBookingLimits: id => request(`/counselors/${id}/booking-limits`),
-  updateCounselorBookingLimits: limits => request('/counselors/booking-limits', { method: 'PUT', body: JSON.stringify(limits) }),
   getCounselorExceptions: id => request(`/counselors/${id}/exceptions`),
   addCounselorException: exception => request('/counselors/exceptions', { method: 'POST', body: JSON.stringify(exception) }),
   deleteCounselorException: id => request(`/counselors/exceptions/${id}`, { method: 'DELETE' }),

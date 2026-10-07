@@ -1,6 +1,6 @@
 import { User, Appointment, CareRequest, Transaction, AppointmentType, AuditLog } from '../models/index.js';
 import { sendNotification } from '../utils/notificationService.js';
-import { validateSchedule } from '../utils/scheduling.js';
+import { validateSchedule, validOnlineMeetingLink } from '../utils/scheduling.js';
 
 const logAction = async (userId, action, req) => {
   try {
@@ -190,6 +190,10 @@ export const rescheduleAppointment = async (req, res) => {
   }
 
   try {
+    const actor = await User.findOne({ id: req.userId });
+    if (!actor) return res.status(401).json({ message: 'User not found.' });
+    if (actor.role === 'counselor') return res.status(403).json({ message: 'Counselors can attend assigned sessions and add notes only. Contact an admin for schedule changes.' });
+
     const apt = await Appointment.findOne({ id: req.params.id });
 
     if (!apt) {
@@ -254,6 +258,10 @@ export const rescheduleAppointment = async (req, res) => {
 
 export const cancelAppointment = async (req, res) => {
   try {
+    const actor = await User.findOne({ id: req.userId });
+    if (!actor) return res.status(401).json({ message: 'User not found.' });
+    if (actor.role === 'counselor') return res.status(403).json({ message: 'Counselors can attend assigned sessions and add notes only. Contact an admin for schedule changes.' });
+
     const apt = await Appointment.findOne({ id: req.params.id });
 
     if (!apt) {
@@ -324,7 +332,7 @@ export const cancelAppointment = async (req, res) => {
 };
 
 export const updateAppointment = async (req, res) => {
-  const { status, sessionNotes } = req.body;
+  const { status, sessionNotes, meetingLink } = req.body;
 
   try {
     const apt = await Appointment.findOne({ id: req.params.id });
@@ -337,13 +345,23 @@ export const updateAppointment = async (req, res) => {
     if (!actor) return res.status(401).json({ message: 'User not found.' });
     const isAssignedCounselor = actor.role === 'counselor' && apt.counselorId === actor.id;
     const isAdmin = actor.role === 'admin';
+    if (actor.role === 'counselor' && Object.keys(req.body).some(field => field !== 'sessionNotes')) {
+      return res.status(403).json({ message: 'Counselors can update session notes only.' });
+    }
+
+    if (meetingLink !== undefined) {
+      if (!isAdmin) return res.status(403).json({ message: 'Only an admin can update meeting links.' });
+      if (apt.appointmentType === 'In-Person Consultation') return res.status(400).json({ message: 'Offline sessions take place at HO and do not use meeting links.' });
+      if (typeof meetingLink !== 'string' || !validOnlineMeetingLink(meetingLink)) return res.status(400).json({ message: 'Use a valid HTTPS Zoom or Google Meet link.' });
+      apt.meetingLink = meetingLink.trim();
+    }
 
     if (status) {
       if (!['completed', 'cancelled'].includes(status)) {
         return res.status(400).json({ message: 'Use the dedicated workflow to set this appointment status.' });
       }
-      if (!isAssignedCounselor && !isAdmin) {
-        return res.status(403).json({ message: 'Only the assigned counselor or an admin can update appointment status.' });
+      if (!isAdmin) {
+        return res.status(403).json({ message: 'Only an admin can update appointment status.' });
       }
       if (apt.status !== 'upcoming') {
         return res.status(409).json({ message: 'Only scheduled appointments can be completed or cancelled.' });
@@ -355,6 +373,7 @@ export const updateAppointment = async (req, res) => {
       if (!isAssignedCounselor) {
         return res.status(403).json({ message: 'Only the counselor can update clinical session notes.' });
       }
+      if (!['upcoming', 'completed'].includes(apt.status)) return res.status(409).json({ message: 'Notes can only be added to confirmed or completed sessions.' });
       if (typeof sessionNotes !== 'string' || sessionNotes.length > 20000) {
         return res.status(400).json({ message: 'Session notes must be under 20,000 characters.' });
       }

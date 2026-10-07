@@ -1,15 +1,10 @@
-import dotenv from 'dotenv';
+import './env.js';
 import crypto from 'crypto';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '.env') });
 
 if (!globalThis.crypto) { globalThis.crypto = crypto.webcrypto || crypto; }
 import express from 'express';
 import cors from 'cors';
-import { db, User } from './db.js';
+import { connectDB, User } from './db.js';
 import { getUserIdFromToken } from './utils/security.js';
 import authRoutes from './routes/auth.js';
 import counselorRoutes from './routes/counselors.js';
@@ -67,6 +62,13 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong on the server!' });
 });
+
+try {
+  await connectDB();
+} catch (err) {
+  console.error('MongoDB connection error:', err.message);
+  process.exit(1);
+}
 
 const server = app.listen(PORT, () => {
   console.log(`Counselling Program server is running on http://localhost:${PORT}`);

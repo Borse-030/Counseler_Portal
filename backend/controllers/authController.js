@@ -1,5 +1,5 @@
 import { createCareRequest } from '../utils/careRequestService.js';
-import { User, Availability, AppointmentType, BookingLimit, AuditLog, OtpVerification } from '../models/index.js';
+import { User, Availability, AppointmentType, AuditLog, OtpVerification } from '../models/index.js';
 import {
   compareOtp,
   generateOtp,
@@ -279,8 +279,7 @@ export const register = async (req, res) => {
         counselorId: userId,
         workingDays: [1, 2, 3, 4, 5],
         startHour: '09:00',
-        endHour: '17:00',
-        slotDuration: 60
+        endHour: '17:00'
       });
       await newAvail.save();
 
@@ -291,13 +290,6 @@ export const register = async (req, res) => {
         { id: `${userId}_InPerson`, counselorId: userId, name: 'In-Person Consultation', duration: 60, price: 0, bufferTime: 30, description: 'In-office therapy session.' }
       ]);
 
-      const newLimit = new BookingLimit({
-        counselorId: userId,
-        maxAppointmentsPerDay: 5,
-        minNoticePeriodHours: 2,
-        maxAdvanceBookingDays: 30
-      });
-      await newLimit.save();
     } else if (['user', 'patient'].includes(finalRole)) {
       // Patient accounts remain unusable until a staff member approves their intake.
       newUser.approved = false;

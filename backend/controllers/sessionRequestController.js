@@ -1,4 +1,4 @@
-import { validateSchedule } from '../utils/scheduling.js';
+import { validateSchedule, validOnlineMeetingLink } from '../utils/scheduling.js';
 import crypto from 'crypto';
 import { Appointment, AppointmentType, CareRequest, User } from '../models/index.js';
 import { sendNotification } from '../utils/notificationService.js';
@@ -27,7 +27,7 @@ const addTimeline = (careRequest, status, actor, note = '') => {
   });
 };
 
-const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind, status = 'upcoming', purpose = '', duration: requestedDuration }) => {
+const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind, status = 'upcoming', purpose = '', duration: requestedDuration, meetingLink = '' }) => {
   const appointmentCounselorId = kind === 'discovery' ? careRequest.assignedCounselorId : careRequest.finalCounselorId;
   const counselor = await User.findOne({ id: appointmentCounselorId, role: 'counselor', approved: true, suspended: { $ne: true } });
   if (!counselor) throw new Error('The assigned counselor is not active.');
@@ -51,8 +51,8 @@ const createAppointmentForRequest = async (careRequest, actor, { date, time, app
     amount: 0,
     status,
     purpose: String(purpose).slice(0, 1000),
-    clinicAddress: normalizedType === 'In-Person Consultation' ? 'Counselling Program Wellness Center' : '',
-    meetingLink: '',
+    clinicAddress: normalizedType === 'In-Person Consultation' ? 'HO' : '',
+    meetingLink: normalizedType === 'In-Person Consultation' ? '' : meetingLink.trim(),
     intakeNotes: kind === 'session' ? careRequest.intakeNotes : '',
     sessionNotes: '',
     review: null,
@@ -295,7 +295,7 @@ export const assignFinalCounselor = async (req, res) => {
 
 export const scheduleSession = async (req, res) => {
   const { sessions: submittedSessions, date, time, appointmentType = 'Video Consultation', purpose = '', kind = 'session' } = req.body;
-  if (req.user.role !== 'admin' && (req.user.role !== 'counselor' || req.user.approved !== true)) return res.status(403).json({ message: 'Approved counselor or admin access required.' });
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Only an admin can schedule sessions or follow-ups.' });
 
   try {
     const careRequest = await CareRequest.findOne({ id: req.params.id });
@@ -311,7 +311,18 @@ export const scheduleSession = async (req, res) => {
       appointmentType: item.appointmentType || 'Video Consultation',
       kind: item.kind === 'follow_up' ? 'follow_up' : 'session',
     }));
+    const requestedMode = careRequest.preferredFormat === 'In-Person Consultation' ? 'offline'
+      : careRequest.preferredFormat === 'Online Consultation' ? 'online' : null;
     for (const item of normalized) {
+      const scheduledMode = item.appointmentType === 'In-Person Consultation' ? 'offline'
+        : ['Video Consultation', 'Online Consultation'].includes(item.appointmentType) ? 'online' : null;
+      if (!requestedMode || scheduledMode !== requestedMode) {
+        return res.status(400).json({ message: 'Session mode must match the user requested mode: online or offline.' });
+      }
+      if (scheduledMode === 'online' && !validOnlineMeetingLink(item.meetingLink)) {
+        return res.status(400).json({ message: 'Add a valid HTTPS Zoom or Google Meet link for every online session.' });
+      }
+      item.meetingLink = scheduledMode === 'online' ? item.meetingLink.trim() : '';
       if (item.duration !== undefined && (!Number.isInteger(Number(item.duration)) || Number(item.duration) < 10 || Number(item.duration) > 180)) {
         return res.status(400).json({ message: 'Session duration must be between 10 and 180 minutes.' });
       }

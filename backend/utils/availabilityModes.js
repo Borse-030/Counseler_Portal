@@ -22,8 +22,7 @@ export const modesAtTime = (intervals, time, duration, step = 60) => {
     if (!validTime(interval.startHour) || !validTime(interval.endHour)) continue;
     const begin = toMinutes(interval.startHour), end = toMinutes(interval.endHour);
     if (start < begin || start + duration > end || (start - begin) % step !== 0) continue;
-    if (!interval.mode || interval.mode === 'both') { modes.add('online'); modes.add('offline'); }
-    else if (['online', 'offline'].includes(interval.mode)) modes.add(interval.mode);
+    if (['online', 'offline'].includes(interval.mode)) modes.add(interval.mode);
   }
   return [...modes];
 };
@@ -39,7 +38,7 @@ export const validateDayConfigs = days => {
     for (let i = 0; i < sorted.length; i++) {
       const slot = sorted[i];
       if (!validTime(slot.startHour) || !validTime(slot.endHour) || slot.startHour >= slot.endHour) return 'Each block needs valid start and end times, with the end after the start.';
-      if (slot.mode !== undefined && !['online', 'offline', 'both'].includes(slot.mode)) return 'Session mode must be online, offline, or both.';
+      if (!['online', 'offline'].includes(slot.mode)) return 'Session mode must be online or offline.';
       if (i && slot.startHour < sorted[i - 1].endHour) return 'Availability blocks must not overlap, even when their session modes differ.';
     }
   }

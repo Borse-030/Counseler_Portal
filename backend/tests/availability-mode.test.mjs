@@ -27,7 +27,7 @@ const setup = ({ slots = day.slots, booked = [], leave = false } = {}) => {
 };
 const response = () => ({ code: 200, status(value) { this.code = value; return this; }, json(data) { this.data = data; return this; } });
 
-test('availability schema persists mode, defaults legacy blocks to both, and rejects invalid modes', () => {
+test('availability schema persists explicit modes and rejects both', () => {
   const stagedBackend = new URL('../../../../backend/package.json', import.meta.url);
   const require = createRequire(fs.existsSync(stagedBackend) ? stagedBackend : new URL('../package.json', import.meta.url));
   const mongoose = require('mongoose');
@@ -36,7 +36,9 @@ test('availability schema persists mode, defaults legacy blocks to both, and rej
   assert.equal(document.daysConfig[0].slots[0].mode, 'online');
   assert.equal(document.daysConfig[0].slots[1].mode, 'offline');
   document.daysConfig[0].slots.push({ startHour: '18:00', endHour: '19:00' });
-  assert.equal(document.daysConfig[0].slots[2].mode, 'both');
+  assert.equal(document.daysConfig[0].slots[2].mode, undefined);
+  document.daysConfig[0].slots[2].mode = 'both';
+  assert(document.validateSync().errors['daysConfig.0.slots.2.mode']);
   document.daysConfig[0].slots[0].mode = 'invalid';
   assert(document.validateSync().errors['daysConfig.0.slots.0.mode']);
 });
@@ -47,9 +49,11 @@ test('online and offline sessions are restricted to the matching time blocks', a
   assert.match(await validate('c', '2026-10-07', '09:00', 60, '', '', 'In-Person Consultation'), /session mode/);
   assert.match(await validate('c', '2026-10-07', '13:00', 60, '', '', 'Audio Consultation'), /session mode/);
 });
-test('legacy availability continues to accept both modes', async () => {
+test('legacy availability requires an explicit mode before matching', async () => {
   const { validate } = setup({ slots: [{ startHour: '09:00', endHour: '17:00' }] });
-  for (const type of ['Video Consultation', 'In-Person Consultation']) assert.equal(await validate('c', '2026-10-07', '09:00', 60, '', '', type), '');
+  for (const type of ['Video Consultation', 'In-Person Consultation']) assert.match(await validate('c', '2026-10-07', '09:00', 60, '', '', type), /published availability/);
+  assert.deepEqual(modesAtTime([{ startHour: '09:00', endHour: '17:00', mode: 'both' }], '09:00', 60), []);
+  assert.match(validateDayConfigs([{ ...day, slots: [{ startHour: '09:00', endHour: '17:00', mode: 'both' }] }]), /online or offline/);
 });
 test('a session must fit within a single block and cannot straddle an online/offline transition', async () => {
   const { validate } = setup();

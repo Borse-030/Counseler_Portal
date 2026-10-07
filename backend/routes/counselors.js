@@ -7,8 +7,6 @@ import {
   getExceptions,
   addException,
   deleteException,
-  getBookingLimits,
-  updateBookingLimits,
   getAvailability,
   updateAvailability,
   getSlots
@@ -39,8 +37,6 @@ router.put('/appointment-types', authenticate, updateAppointmentTypes);
 router.get('/:id/exceptions', getExceptions);
 router.post('/exceptions', authenticate, addException);
 router.delete('/exceptions/:id', authenticate, deleteException);
-router.get('/:id/booking-limits', getBookingLimits);
-router.put('/booking-limits', authenticate, updateBookingLimits);
 router.get('/:id/availability', getAvailability);
 router.put('/availability', authenticate, updateAvailability);
 router.get('/:id/slots', getSlots);

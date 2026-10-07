@@ -1,3 +1,4 @@
+import './env.js';
 import mongoose from 'mongoose';
 
 export {
@@ -5,7 +6,6 @@ export {
   AppointmentType,
   AuditLog,
   Availability,
-  BookingLimit,
   CareRequest,
   Exception,
   Inquiry,
@@ -17,15 +17,15 @@ export {
 } from './models/index.js';
 import dotenv from 'dotenv';
 
-dotenv.config();
+export async function connectDB() {
+  const uri = process.env.MONGODB_URI?.trim();
+  if (!uri) {
+    throw new Error('MONGODB_URI is required. Set it in backend/.env or the process environment.');
+  }
 
-const MONGODB_URI = process.env.MONGODB_URI
-
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
-  })
-  .catch((err) => console.error('MongoDB connection error:', err));
+  await mongoose.connect(uri);
+  console.log('Connected to MongoDB');
+}
 
 export const db = {
   reset: async () => {

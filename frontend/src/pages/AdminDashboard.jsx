@@ -1,4 +1,5 @@
 import AdminScheduleSession from '../components/AdminScheduleSession';
+import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { 
   Box, Container, Typography, Grid, Card, CardContent, CardActionArea, Avatar, Button, Tabs, Tab,
@@ -85,7 +86,6 @@ export default function AdminDashboard({ currentUser }) {
   const [selectedCase, setSelectedCase] = useState(null);
   const [discoveryDraft, setDiscoveryDraft] = useState('');
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
-  const [assignmentCounselorId, setAssignmentCounselorId] = useState('');
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
   // User search/filter
@@ -291,17 +291,6 @@ export default function AdminDashboard({ currentUser }) {
     finally { setDiscoveryBusy(false); }
   };
 
-  const assignCaseCounselor = async () => {
-    if (!currentCaseRequest || !assignmentCounselorId) return;
-    try {
-      setDiscoveryBusy(true);
-      const result = await api.assignFinalCounselor(currentCaseRequest.id, { counselorId: assignmentCounselorId });
-      setSelectedCase(previous => previous ? { ...previous, request: result.request } : previous);
-      setSuccess('Counselor assigned to this patient.');
-      await fetchAdminData();
-    } catch (err) { setError(err.message || 'Unable to assign counselor.'); }
-    finally { setDiscoveryBusy(false); }
-  };
 
   if (loading) {
     return (
@@ -425,13 +414,8 @@ export default function AdminDashboard({ currentUser }) {
           </Box>
 
           {currentCaseRequest.status === 'discovery_completed' && !currentCaseRequest.finalCounselorId && <Box>
-            <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assign counselor</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-              <TextField select fullWidth label="Approved counselor" value={assignmentCounselorId} onChange={event => setAssignmentCounselorId(event.target.value)}>
-                {users.filter(user => user.role === 'counselor' && user.approved && !user.suspended).map(counselor => <MenuItem key={counselor.id} value={counselor.id}>{counselor.name} · {counselor.specialty || 'Counselor'}</MenuItem>)}
-              </TextField>
-              <Button variant="contained" disabled={!assignmentCounselorId || discoveryBusy} onClick={assignCaseCounselor}>Assign</Button>
-            </Stack>
+            <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assign counselor and schedule session</Typography>
+            <Button variant="contained" disabled={discoveryBusy} onClick={() => setScheduleOpen(true)}>Assign counselor and schedule session</Button>
           </Box>}
 
           {currentCaseRequest.finalCounselorId && ['matched', 'active'].includes(currentCaseRequest.status) && <Box>
@@ -443,7 +427,7 @@ export default function AdminDashboard({ currentUser }) {
           <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
             {!!currentCaseRequest.reviews?.length && <Stack spacing={1} sx={{ mb: 1.5 }}>{currentCaseRequest.reviews.map((review, index) => <Paper key={`${review.at}-${index}`} variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">Registration {review.decision === 'accepted' ? 'approved' : 'rejected'} · {new Date(review.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {review.actorName}</Typography>{review.reason && <Typography variant="body2">{review.reason}</Typography>}</Paper>)}</Stack>}
             {!!currentCaseRequest.timeline?.length && <Box component="details" sx={{ mb: 1.5 }}><Typography component="summary" variant="body2" fontWeight={650} sx={{ cursor: 'pointer', mb: 1 }}>Care timeline ({currentCaseRequest.timeline.length})</Typography>{[...currentCaseRequest.timeline].reverse().map((event, index) => <Typography key={`${event.at}-${index}`} variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>{new Date(event.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {event.actorName}: {event.note}</Typography>)}</Box>}
-            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{appointment.review?.rating && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.rating}/5 · {appointment.review.reviewText}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
+            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{appointment.review?.rating && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.rating}/5 · {appointment.review.reviewText}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
           </Box>
           </Stack>
         </Stack>}

@@ -19,7 +19,6 @@ import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 // import SpaIcon from '@mui/icons-material/Spa';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 
 import { getTheme } from './theme';
 import { api } from './api';

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogTitle, Divider, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { api } from '../api';
+import { isOnlineMeetingLink } from '../utils/sessionAttendance';
+import AttendSessionButton from './AttendSessionButton';
 
 const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const freshSession = () => ({ date: todayIST(), time: '', duration: 60, appointmentType: 'Video Consultation', kind: 'session', purpose: '', meetingLink: '' });
@@ -37,10 +39,10 @@ function ScheduleRow({ value, onChange, counselorId, disabled }) {
     <TextField select label="Session purpose" value={value.kind} disabled={disabled} onChange={e => onChange({ ...value, kind: e.target.value })}>
       <MenuItem value="session">Counseling session</MenuItem><MenuItem value="follow_up">Follow-up call / session</MenuItem>
     </TextField>
-    <TextField select label="Format" value={value.appointmentType} disabled={disabled} onChange={e => onChange({ ...value, appointmentType: e.target.value, time: '' })}>
-      <MenuItem value="Video Consultation">Video meeting</MenuItem><MenuItem value="Audio Consultation">Phone call</MenuItem><MenuItem value="In-Person Consultation">In person</MenuItem>
+    <TextField select label="Format" value={value.appointmentType} disabled onChange={e => onChange({ ...value, appointmentType: e.target.value, time: '' })}>
+      <MenuItem value="Video Consultation">Online</MenuItem><MenuItem value="In-Person Consultation">Offline</MenuItem>
     </TextField>
-    <TextField label="Meeting link (optional)" type="url" value={value.meetingLink} disabled={disabled} placeholder="https://…" helperText="Use the BJS meeting link, or contact the user by phone." onChange={e => onChange({ ...value, meetingLink: e.target.value })} />
+    {value.appointmentType === 'In-Person Consultation' ? <Alert severity="info">Offline session location: HO</Alert> : <TextField label="Zoom or Google Meet link" required type="url" value={value.meetingLink} disabled={disabled} error={Boolean(value.meetingLink) && !isOnlineMeetingLink(value.meetingLink)} helperText="Add a Zoom or Google Meet HTTPS link." onChange={e => onChange({ ...value, meetingLink: e.target.value })} />}
     <TextField multiline minRows={2} label="Session goal / follow-up reason" value={value.purpose} disabled={disabled} onChange={e => onChange({ ...value, purpose: e.target.value })} />
   </Stack>;
 }
@@ -90,13 +92,13 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
   const open = (kind, request, extra = {}) => {
     setError(''); setReason(''); setAvailability(null);
     setCounselorId(request.finalCounselorId || request.assignedCounselorId || '');
-    setSessions([freshSession()]);
+    setSessions([{ ...freshSession(), appointmentType: request.preferredFormat === 'In-Person Consultation' ? 'In-Person Consultation' : 'Video Consultation' }]);
     setDialog({ kind, request, ...extra });
   };
   const submit = () => {
     const { kind, request } = dialog;
     if (kind === 'registration') return act(() => api.decideSessionRequest(request.id, { decision: dialog.decision, reason }), true);
-    if (kind === 'sessions') return act(() => api.scheduleRequestSession(request.id, { sessions }), true);
+    if (kind === 'sessions' && isAdmin) return act(() => api.scheduleRequestSession(request.id, { sessions }), true);
     if (kind === 'assignment') return act(() => api.assignFinalCounselor(request.id, { counselorId, reason }), true);
   };
   const filtered = requests.filter(r => (!requestId || requestId === r.id) && (filter === 0 ? ['submitted', 'assigned'].includes(r.status) : filter === 1 ? ['accepted', ...liveStages].includes(r.status) : filter === 2 ? r.status === 'rejected' : true));
@@ -114,7 +116,6 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
           : 'No requests in this view are assigned to your counselor account.'}
     </Alert>}
     {filtered.map(request => {
-      const ownCare = request.finalCounselorId === currentUser.id;
       const related = appointments.filter(a => a.careRequestId === request.id);
       const discoveryCompletedEvent = [...(request.timeline || [])].reverse().find(event => event.status === 'discovery_completed');
       const editableNotes = isAdmin && ['accepted', 'discovery_scheduled', 'discovery_completed'].includes(request.status);
@@ -140,7 +141,7 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
           <TextField fullWidth multiline minRows={3} label="Discovery call notes (internal)" value={discoveryNotes} disabled={!editableNotes || busy} onChange={e => setNotes(previous => ({ ...previous, [request.id]: e.target.value }))} />
           {editableNotes && <Button disabled={busy || !discoveryNotes.trim()} onClick={() => act(() => api.saveDiscoveryNotes(request.id, discoveryNotes))}>{request.status === 'accepted' ? 'Save notes & mark discovery done' : 'Update discovery notes'}</Button>}
         </Box>}
-        {request.finalCounselorId && ['matched', 'active'].includes(request.status) && ownCare && <Button disabled={busy} variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => open('sessions', request)}>Schedule sessions / follow-ups</Button>}
+        {request.finalCounselorId && ['matched', 'active'].includes(request.status) && isAdmin && <Button disabled={busy} variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => open('sessions', request)}>Schedule sessions / follow-ups</Button>}
         {!!related.length && <Box><Divider sx={{ mb: 1 }} /><Typography variant="subtitle2">Calls, sessions and feedback</Typography>
         {related.map(appointment => <Box key={appointment.id} sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="body2" fontWeight={600}>{appointment.appointmentKind === 'discovery' ? 'Discovery' : appointment.appointmentKind === 'follow_up' ? 'Follow-up' : 'Session'} · {appointment.date} {appointment.time} IST · {appointment.duration} min</Typography>
@@ -151,7 +152,8 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
             {!!appointment.sessionNoteHistory?.length && <Box component="details" sx={{ mt: 0.5 }}><Typography component="summary" variant="caption" sx={{ cursor: 'pointer' }}>Previous note versions ({appointment.sessionNoteHistory.length})</Typography>{appointment.sessionNoteHistory.map((entry, i) => <Typography key={`${entry.at}-${i}`} variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{new Date(entry.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} · {entry.actorName}: {entry.notes || '(empty note)'}</Typography>)}</Box>}
             {appointment.review?.rating && <Typography variant="body2">Feedback: {appointment.review.rating}/5 — {appointment.review.reviewText || 'No written feedback'}</Typography>}
             <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              {['upcoming', 'completed'].includes(appointment.status) && <Button component={Link} to={`/session/${appointment.id}`} size="small">Open call / notes</Button>}
+              {appointment.status === 'upcoming' && <AttendSessionButton appointment={appointment} size="small" />}
+              {['upcoming', 'completed'].includes(appointment.status) && <Button component={Link} to={`/session/${appointment.id}`} size="small">Session notes</Button>}
             </Stack>
           </Box>)}
         </Box>}
@@ -179,17 +181,17 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
           <TextField multiline minRows={2} label="Skills match / assignment reason" value={reason} onChange={e => setReason(e.target.value)} disabled={busy} />
         </>}
         {dialog?.kind === 'sessions' && <>
-          {dialog.kind === 'sessions' && <Alert severity="info">Sessions are confirmed when saved. The assigned counselor can add notes and mark each session complete afterward.</Alert>}
+          {dialog.kind === 'sessions' && <Alert severity="info">Sessions are confirmed when saved. The assigned counselor can attend each session and add notes afterward.</Alert>}
           {sessions.map((session, index) => <Box key={index}>
             <Typography variant="subtitle2">Session {index + 1}</Typography>
             <ScheduleRow value={session} disabled={busy} counselorId={dialog.request.finalCounselorId} onChange={value => setSessions(previous => previous.map((item, i) => i === index ? value : item))} />
             {sessions.length > 1 && <Button disabled={busy} color="error" onClick={() => setSessions(previous => previous.filter((_, i) => i !== index))}>Remove session</Button>}
             <Divider sx={{ mt: 2 }} />
           </Box>)}
-          {dialog.kind === 'sessions' && <Button disabled={busy || sessions.length >= 12} onClick={() => setSessions(previous => [...previous, freshSession()])}>Add another session</Button>}
+          {dialog.kind === 'sessions' && <Button disabled={busy || sessions.length >= 12} onClick={() => setSessions(previous => [...previous, { ...freshSession(), appointmentType: previous[0].appointmentType }])}>Add another session</Button>}
         </>}
       </Stack></DialogContent>
-      <DialogActions><Button disabled={busy} onClick={() => setDialog(null)}>Cancel</Button><Button variant="contained" onClick={submit} disabled={busy || (dialog?.decision === 'rejected' && !reason.trim()) || (dialog?.kind === 'assignment' && !counselorId) || (dialog?.kind === 'sessions' && sessions.some(s => !s.date || !s.time))}>{busy ? 'Saving…' : dialog?.kind === 'sessions' ? 'Confirm schedule' : 'Confirm'}</Button></DialogActions>
+      <DialogActions><Button disabled={busy} onClick={() => setDialog(null)}>Cancel</Button><Button variant="contained" onClick={submit} disabled={busy || (dialog?.decision === 'rejected' && !reason.trim()) || (dialog?.kind === 'assignment' && !counselorId) || (dialog?.kind === 'sessions' && sessions.some(s => !s.date || !s.time || (s.appointmentType !== 'In-Person Consultation' && !isOnlineMeetingLink(s.meetingLink))))}>{busy ? 'Saving…' : dialog?.kind === 'sessions' ? 'Confirm schedule' : 'Confirm'}</Button></DialogActions>
     </Dialog>
   </Stack>;
 }

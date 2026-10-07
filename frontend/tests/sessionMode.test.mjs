@@ -5,8 +5,8 @@ import { sessionTypesForAvailability, slotSupportsMode } from '../src/utils/sess
 const availability = mode => ({ workingDays: [3], daysConfig: [{ dayIndex: 3, active: true, slots: [{ startHour: '13:00', endHour: '18:00', mode }] }] });
 const names = types => types.map(type => type.name);
 
-test('Elena can offer both modes from saved availability with no custom appointment types', () => {
-  assert.deepEqual(names(sessionTypesForAvailability(availability('both'), [])), ['Video Consultation', 'In-Person Consultation']);
+test('legacy both-mode blocks require an explicit online or offline choice', () => {
+  assert.deepEqual(names(sessionTypesForAvailability(availability('both'), [])), []);
 });
 test('offline-only and online-only availability expose only their supported mode', () => {
   assert.deepEqual(names(sessionTypesForAvailability(availability('offline'), [])), ['In-Person Consultation']);
@@ -15,8 +15,8 @@ test('offline-only and online-only availability expose only their supported mode
 test('custom types supplement availability and do not enable an unsupported mode', () => {
   assert.deepEqual(names(sessionTypesForAvailability(availability('online'), [{ name: 'Audio Consultation' }, { name: 'In-Person Consultation' }])), ['Audio Consultation', 'Video Consultation']);
 });
-test('legacy hours remain bookable without custom types', () => {
-  assert.deepEqual(names(sessionTypesForAvailability({ workingDays: [1, 2], startHour: '09:00', endHour: '17:00' })), ['Video Consultation', 'In-Person Consultation']);
+test('legacy hours require an explicit mode before matching', () => {
+  assert.deepEqual(names(sessionTypesForAvailability({ workingDays: [1, 2], startHour: '09:00', endHour: '17:00' })), []);
 });
 test('inactive days do not invent modes, even when custom types exist', () => {
   assert.deepEqual(sessionTypesForAvailability({ workingDays: [3], daysConfig: [{ dayIndex: 3, active: false, slots: availability('online').daysConfig[0].slots }] }, [{ name: 'Video Consultation' }]), []);

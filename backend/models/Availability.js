@@ -5,7 +5,6 @@ const AvailabilitySchema = new mongoose.Schema({
   workingDays: { type: [Number], default: [1, 2, 3, 4, 5] },
   startHour: { type: String, default: '09:00' },
   endHour: { type: String, default: '17:00' },
-  slotDuration: { type: Number, default: 60 },
   daysConfig: {
     type: [
       {
@@ -15,7 +14,7 @@ const AvailabilitySchema = new mongoose.Schema({
           {
             startHour: { type: String, default: '09:00' },
             endHour: { type: String, default: '17:00' },
-            mode: { type: String, enum: ['online', 'offline', 'both'], default: 'both' }
+            mode: { type: String, enum: ['online', 'offline'], default: undefined }
           }
         ]
       }

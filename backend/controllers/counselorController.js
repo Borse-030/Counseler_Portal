@@ -1,6 +1,6 @@
 import { validateSchedule } from '../utils/scheduling.js';
 import { appointmentMode, dayIntervals, modesAtTime, toMinutes, validDate, validateDayConfigs } from '../utils/availabilityModes.js';
-import { User, Availability, Appointment, AppointmentType, Exception, BookingLimit, AuditLog } from '../models/index.js';
+import { User, Availability, Appointment, AppointmentType, Exception, AuditLog } from '../models/index.js';
 
 const logAction = async (userId, action, req) => {
   try {
@@ -184,41 +184,6 @@ export const deleteException = async (req, res) => {
   }
 };
 
-export const getBookingLimits = async (req, res) => {
-  try {
-    const counselorLimit = await BookingLimit.findOne({ counselorId: req.params.id }) || {
-      counselorId: req.params.id,
-      maxAppointmentsPerDay: 5,
-      minNoticePeriodHours: 2,
-      maxAdvanceBookingDays: 30
-    };
-    res.json(counselorLimit);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const updateBookingLimits = async (req, res) => {
-  const { maxAppointmentsPerDay, minNoticePeriodHours, maxAdvanceBookingDays } = req.body;
-
-  try {
-    const updatedLimit = await BookingLimit.findOneAndUpdate(
-      { counselorId: req.userId },
-      {
-        maxAppointmentsPerDay: Number(maxAppointmentsPerDay) || 5,
-        minNoticePeriodHours: Number(minNoticePeriodHours) || 2,
-        maxAdvanceBookingDays: Number(maxAdvanceBookingDays) || 30
-      },
-      { new: true, upsert: true }
-    );
-
-    await logAction(req.userId, 'Updated booking buffers and limits config', req);
-    res.json({ message: 'Booking limits updated successfully', limits: updatedLimit });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
 export const getAvailability = async (req, res) => {
   try {
     const availability = await Availability.findOne({ counselorId: req.params.id }) || {
@@ -226,7 +191,6 @@ export const getAvailability = async (req, res) => {
       workingDays: [1, 2, 3, 4, 5],
       startHour: '09:00',
       endHour: '17:00',
-      slotDuration: 60,
       daysConfig: []
     };
     res.json(availability);
@@ -236,13 +200,11 @@ export const getAvailability = async (req, res) => {
 };
 
 export const updateAvailability = async (req, res) => {
-  const { workingDays, startHour, endHour, slotDuration, daysConfig } = req.body;
+  const { workingDays, startHour, endHour, daysConfig } = req.body;
 
   const configError = daysConfig === undefined ? '' : validateDayConfigs(daysConfig);
   if (configError) return res.status(400).json({ message: configError });
-  const duration = Number(slotDuration ?? 60);
-  if (!Number.isInteger(duration) || duration < 10 || duration > 180) return res.status(400).json({ message: 'Slot interval must be from 10 to 180 minutes.' });
-  const normalizedDays = daysConfig?.map(day => ({ dayIndex: day.dayIndex, active: day.active, slots: day.slots.map(slot => ({ startHour: slot.startHour, endHour: slot.endHour, mode: slot.mode || 'both' })) }));
+  const normalizedDays = daysConfig?.map(day => ({ dayIndex: day.dayIndex, active: day.active, slots: day.slots.map(slot => ({ startHour: slot.startHour, endHour: slot.endHour, mode: slot.mode })) }));
 
   try {
     const updatedAvailability = await Availability.findOneAndUpdate(
@@ -251,7 +213,6 @@ export const updateAvailability = async (req, res) => {
         workingDays: normalizedDays ? normalizedDays.filter(day => day.active).map(day => day.dayIndex) : workingDays || [1, 2, 3, 4, 5],
         startHour: startHour || '09:00',
         endHour: endHour || '17:00',
-        slotDuration: duration,
         daysConfig: normalizedDays || []
       },
       { new: true, upsert: true, runValidators: true }
@@ -270,21 +231,29 @@ export const getSlots = async (req, res) => {
   if (!validDate(date) || !Number.isInteger(duration) || duration < 10 || duration > 180) return res.status(400).json({ message: 'Choose a valid date and a duration from 10 to 180 minutes.' });
   try {
     const counselorId = req.params.id;
-    const availability = await Availability.findOne({ counselorId }) || { workingDays: [1, 2, 3, 4, 5], startHour: '09:00', endHour: '17:00', slotDuration: 60 };
+    const availability = await Availability.findOne({ counselorId }) || { workingDays: [1, 2, 3, 4, 5], startHour: '09:00', endHour: '17:00' };
     const intervals = dayIntervals(availability, date);
-    const step = Math.max(1, Number(availability.slotDuration) || 60);
+    const step = duration;
     const times = new Set();
     for (const interval of intervals) {
       for (let start = toMinutes(interval.startHour); start + duration <= toMinutes(interval.endHour); start += step) {
         const time = `${String(Math.floor(start / 60)).padStart(2, '0')}:${String(start % 60).padStart(2, '0')}`;
         const modes = modesAtTime(intervals, time, duration, step);
-        if (!appointmentType || modes.includes(appointmentMode(appointmentType))) times.add(time);
+        if (modes.length && (!appointmentType || modes.includes(appointmentMode(appointmentType)))) times.add(time);
       }
     }
-    const slots = await Promise.all([...times].sort().map(async time => ({
-      time, modes: modesAtTime(intervals, time, duration, step),
-      available: !(await validateSchedule(counselorId, date, time, duration, '', '', appointmentType)),
-    })));
-    res.json({ date, slots, message: slots.some(slot => slot.available) ? '' : 'No available times for this date, duration, and session mode.' });
+    const slots = await Promise.all([...times].sort().map(async time => {
+      const reason = await validateSchedule(counselorId, date, time, duration, '', '', appointmentType);
+      return { time, modes: modesAtTime(intervals, time, duration, step), available: !reason, reason };
+    }));
+    let message = '';
+    if (!slots.some(slot => slot.available)) {
+      if (slots.length) message = [...new Set(slots.map(slot => slot.reason).filter(Boolean))].join(' ');
+      else if (!intervals.length) message = 'The counselor does not work on this day.';
+      else if (!intervals.some(interval => ['online', 'offline'].includes(interval.mode))) message = 'The counselor needs to choose online or offline for this day in their availability settings.';
+      else if (appointmentType && !intervals.some(interval => interval.mode === appointmentMode(appointmentType))) message = 'The counselor has no ' + appointmentMode(appointmentType) + ' availability on this date.';
+      else message = 'A ' + duration + '-minute session must fit completely within an availability block. Choose a shorter duration or another date.';
+    }
+    res.json({ date, slots, message });
   } catch (error) { res.status(500).json({ message: error.message }); }
 };

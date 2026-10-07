@@ -1,4 +1,4 @@
-import { User, Transaction, Appointment, Availability, AppointmentType, BookingLimit } from '../models/index.js';
+import { User, Transaction, Appointment, Availability, AppointmentType } from '../models/index.js';
 import { db } from '../db.js';
 import { sendNotification } from '../utils/notificationService.js';
 import { accountStatusNotification } from '../utils/notificationService.js';
@@ -159,8 +159,7 @@ export const createUser = async (req, res) => {
         counselorId: userId,
         workingDays: [1, 2, 3, 4, 5],
         startHour: '09:00',
-        endHour: '17:00',
-        slotDuration: 60
+        endHour: '17:00'
       });
       await newAvail.save();
 
@@ -171,13 +170,6 @@ export const createUser = async (req, res) => {
         { id: `${userId}_InPerson`, counselorId: userId, name: 'In-Person Consultation', duration: 60, price: 0, bufferTime: 30, description: 'In-office therapy session.' }
       ]);
 
-      const newLimit = new BookingLimit({
-        counselorId: userId,
-        maxAppointmentsPerDay: 5,
-        minNoticePeriodHours: 2,
-        maxAdvanceBookingDays: 30
-      });
-      await newLimit.save();
     }
 
     await newUser.save();

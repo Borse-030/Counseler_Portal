@@ -1,5 +1,5 @@
 export const sessionMode = appointmentType => appointmentType === 'In-Person Consultation' ? 'offline' : 'online';
-export const slotSupportsMode = (slot, appointmentType) => !appointmentType || !slot.modes || slot.modes.includes(sessionMode(appointmentType));
+export const slotSupportsMode = (slot, appointmentType) => Boolean(appointmentType && slot.modes?.includes(sessionMode(appointmentType)));
 export const modeLabel = appointmentType => sessionMode(appointmentType) === 'offline' ? 'Offline · In person' : 'Online';
 
 // Weekly availability defines which modes can be booked. Custom appointment
@@ -7,8 +7,7 @@ export const modeLabel = appointmentType => sessionMode(appointmentType) === 'of
 export const sessionTypesForAvailability = (availability, configuredTypes = [], slots = []) => {
   const modes = new Set();
   const addMode = mode => {
-    if (!mode || mode === 'both') { modes.add('online'); modes.add('offline'); }
-    else if (['online', 'offline'].includes(mode)) modes.add(mode);
+    if (['online', 'offline'].includes(mode)) modes.add(mode);
   };
   if (availability) {
     for (let dayIndex = 0; dayIndex < 7; dayIndex++) {

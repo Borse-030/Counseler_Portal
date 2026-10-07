@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { api } from '../api';
-import { sessionTypesForAvailability, slotSupportsMode } from '../utils/sessionMode';
+import { sessionMode, sessionTypesForAvailability, slotSupportsMode } from '../utils/sessionMode';
+import { isOnlineMeetingLink } from '../utils/sessionAttendance';
 
 const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
@@ -9,8 +10,13 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
   const [date, setDate] = useState(todayIST);
   const [duration, setDuration] = useState(60);
   const [counselorId, setCounselorId] = useState(request.finalCounselorId || '');
-  const [mode, setMode] = useState('');
+  const preference = request.preferredFormat || request.appointmentType || request.supportType;
+  const requestedMode = ['Online Consultation', 'Video Consultation', 'online', 'Online'].includes(preference) ? 'online'
+    : ['In-Person Consultation', 'offline', 'Offline'].includes(preference) ? 'offline' : null;
+  const requestedType = requestedMode === 'offline' ? 'In-Person Consultation' : requestedMode === 'online' ? 'Video Consultation' : '';
+  const [mode, setMode] = useState(requestedMode === 'online' ? 'Video Consultation' : requestedMode === 'offline' ? 'In-Person Consultation' : '');
   const [time, setTime] = useState('');
+  const [meetingLink, setMeetingLink] = useState('');
   const [query, setQuery] = useState('');
   const [details, setDetails] = useState(null);
   const [profiles, setProfiles] = useState({});
@@ -44,26 +50,27 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
     return () => { active = false; };
   }, [counselorKey]);
 
-  const availabilityKey = `${counselorKey}/${date}/${duration}`;
+  const availabilityKey = `${counselorKey}/${date}/${duration}/${requestedType}`;
   useEffect(() => {
     let active = true;
     const ids = counselorKey ? counselorKey.split(',') : [];
     if (!date || date < todayIST()) return;
     Promise.all(ids.map(async id => {
-      try { return [id, await api.getCounselorSlots(id, date, duration)]; }
+      try { return [id, await api.getCounselorSlots(id, date, duration, requestedType)]; }
       catch (err) { return [id, { slots: [], message: err.message || 'Unable to load availability.' }]; }
     })).then(entries => { if (active) setAvailability({ key: availabilityKey, data: Object.fromEntries(entries) }); });
     return () => { active = false; };
-  }, [counselorKey, date, duration, availabilityKey]);
+  }, [counselorKey, date, duration, requestedType, availabilityKey]);
 
   const ready = availability?.key === availabilityKey;
   const selected = counselors.find(c => c.id === counselorId);
-  const counselorTypes = id => sessionTypesForAvailability(details?.[id]?.availability, details?.[id]?.types, ready ? availability.data[id]?.slots : []);
+  const counselorTypes = id => sessionTypesForAvailability(details?.[id]?.availability, details?.[id]?.types, ready ? availability.data[id]?.slots : []).filter(type => type.name === (requestedMode === 'offline' ? 'In-Person Consultation' : requestedMode === 'online' ? 'Video Consultation' : ''));
   const types = counselorTypes(counselorId);
   const slots = ready ? (availability.data[counselorId]?.slots || []).filter(s => s.available && slotSupportsMode(s, mode)) : [];
-  const validMode = types.some(type => type.name === mode);
+  const validMode = requestedMode && sessionMode(mode) === requestedMode && types.some(type => type.name === mode);
   const validTime = slots.some(slot => slot.time === time);
-  const canSubmit = selected && validMode && validTime && date >= todayIST() && !busy;
+  const canSubmit = selected && validMode && validTime && date >= todayIST() && !busy
+    && (requestedMode === 'offline' || isOnlineMeetingLink(meetingLink));
   const chooseCounselor = counselor => {
     setCounselorId(counselor.id);
     setTime('');
@@ -87,7 +94,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
         onAssigned(result.request);
       }
       const result = await api.scheduleRequestSession(request.id, {
-        sessions: [{ date, time, duration, appointmentType: mode, kind: 'session' }],
+        sessions: [{ date, time, duration, appointmentType: mode, kind: 'session', meetingLink: requestedMode === 'online' ? meetingLink.trim() : '' }],
       });
       await onScheduled(result);
     } catch (err) {
@@ -95,7 +102,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
       // Reload live slots after a booking conflict before allowing another attempt.
       setTime('');
       try {
-        const data = await api.getCounselorSlots(counselorId, date, duration);
+        const data = await api.getCounselorSlots(counselorId, date, duration, requestedType);
         setAvailability(previous => previous?.key === availabilityKey ? { ...previous, data: { ...previous.data, [counselorId]: data } } : previous);
       } catch { setAvailability(null); }
     } finally { setBusy(false); }
@@ -134,7 +141,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
             const info = details?.[c.id];
             const offeredTypes = counselorTypes(c.id);
             const day = ready ? availability.data[c.id] : null;
-            const availableSlots = day?.slots?.filter(slot => slot.available) || [];
+            const availableSlots = day?.slots?.filter(slot => slot.available && slotSupportsMode(slot, requestedMode === 'offline' ? 'In-Person Consultation' : requestedMode === 'online' ? 'Video Consultation' : '')) || [];
             return <Paper variant="outlined" key={c.id} sx={{ p: 2, borderColor: counselorId === c.id ? 'primary.main' : 'divider', borderWidth: counselorId === c.id ? 2 : 1 }}>
               <Stack spacing={1}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
@@ -147,7 +154,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
                 <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.75 }}>{offeredTypes.map(type => <Chip size="small" variant="outlined" label={type.name} key={type.id || type.name} />)}</Stack>
                 {!offeredTypes.length && (!info ? <Typography variant="caption">Loading modes…</Typography> : info.error ? <Typography variant="caption" color="error">{info.error}</Typography> : <Typography variant="caption" color="text.secondary">No active availability blocks configured.</Typography>)}
                 {!day ? <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}><CircularProgress size={14} /><Typography variant="caption">{date && date >= todayIST() ? 'Checking availability…' : 'Choose a valid session date.'}</Typography></Stack> : <Typography variant="body2" color={availableSlots.length ? 'success.main' : 'text.secondary'}>{availableSlots.length ? `${availableSlots.length} available times (IST): ${availableSlots.slice(0, 5).map(s => `${s.time}${s.modes ? ` (${s.modes.join(' / ')})` : ''}`).join(', ')}${availableSlots.length > 5 ? '…' : ''}` : day.message || 'No available times for this date.'}</Typography>}
-                <Button variant={counselorId === c.id ? 'contained' : 'outlined'} disabled={busy} aria-pressed={counselorId === c.id} onClick={() => chooseCounselor(c)}>{counselorId === c.id ? 'Selected counselor' : 'Select counselor'}</Button>
+                <Button variant={counselorId === c.id ? 'contained' : 'outlined'} disabled={busy || !offeredTypes.length} aria-pressed={counselorId === c.id} onClick={() => chooseCounselor(c)}>{counselorId === c.id ? 'Selected counselor' : 'Select counselor'}</Button>
               </Stack>
             </Paper>;
           })}
@@ -156,12 +163,17 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
           <Typography fontWeight={700} sx={{ mb: 2 }}>Session with {selected.name}</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField fullWidth select label="Session mode" value={validMode ? mode : ''} disabled={busy || !types.length} onChange={e => { setMode(e.target.value); setTime(''); }}>
-              {types.map(type => <MenuItem key={type.id || type.name} value={type.name}>{type.name}</MenuItem>)}
+              {types.map(type => <MenuItem key={type.id || type.name} value={type.name}>{sessionMode(type.name) === 'offline' ? 'Offline' : 'Online'}</MenuItem>)}
             </TextField>
             <TextField fullWidth select label="Available time (IST)" value={validTime ? time : ''} disabled={busy || !validMode || !slots.length} helperText={!ready ? 'Checking availability…' : slots.length ? 'Choose an available time.' : availability.data[counselorId]?.message || 'Choose another date or counselor.'} onChange={e => setTime(e.target.value)}>
               {slots.map(slot => <MenuItem key={slot.time} value={slot.time}>{slot.time}</MenuItem>)}
             </TextField>
           </Stack>
+          {requestedMode === 'online' ? <TextField fullWidth required type="url" label="Zoom or Google Meet link" value={meetingLink} disabled={busy}
+            error={Boolean(meetingLink) && !isOnlineMeetingLink(meetingLink)}
+            helperText="Add the HTTPS Zoom or Google Meet link before assigning and scheduling."
+            onChange={e => setMeetingLink(e.target.value)} sx={{ mt: 2 }} />
+            : <Alert severity="info" sx={{ mt: 2 }}>Offline session location: HO</Alert>}
         </Paper>}
       </Stack>
     </DialogContent>
