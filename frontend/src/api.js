@@ -162,7 +162,6 @@ export const api = {
     const params = new URLSearchParams();
     if (filters.specialty) params.append('specialty', filters.specialty);
     if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
-    if (filters.minRating) params.append('minRating', filters.minRating);
     if (filters.search) params.append('search', filters.search);
 
     const queryStr = params.toString() ? `?${params.toString()}` : '';
@@ -253,10 +252,12 @@ export const api = {
     });
   },
 
-  submitReview: async (id, rating, reviewText) => {
+  recordSessionOutcome: async (id, data) => request(`/appointments/${id}/outcome`, { method: 'POST', body: JSON.stringify(data) }),
+
+  submitReview: async (id, reviewText) => {
     return request(`/appointments/${id}/review`, {
       method: 'POST',
-      body: JSON.stringify({ rating, reviewText }),
+      body: JSON.stringify({ reviewText }),
     });
   },
 

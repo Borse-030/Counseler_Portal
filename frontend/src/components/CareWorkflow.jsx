@@ -1,3 +1,5 @@
+import { resolvedStatuses, feedbackLabel, hasFeedback, sessionStatus, statusLabel } from '../utils/sessionOutcome';
+import useSessionClock from '../hooks/useSessionClock';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
@@ -48,6 +50,7 @@ function ScheduleRow({ value, onChange, counselorId, disabled }) {
 }
 
 export default function CareWorkflow({ currentUser, filter = 3, requestId, onAppointmentsChange, onRequestsChange }) {
+  const now = useSessionClock();
   const [requests, setRequests] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [counselors, setCounselors] = useState([]);
@@ -142,18 +145,19 @@ export default function CareWorkflow({ currentUser, filter = 3, requestId, onApp
           {editableNotes && <Button disabled={busy || !discoveryNotes.trim()} onClick={() => act(() => api.saveDiscoveryNotes(request.id, discoveryNotes))}>{request.status === 'accepted' ? 'Save notes & mark discovery done' : 'Update discovery notes'}</Button>}
         </Box>}
         {request.finalCounselorId && ['matched', 'active'].includes(request.status) && isAdmin && <Button disabled={busy} variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => open('sessions', request)}>Schedule sessions / follow-ups</Button>}
-        {!!related.length && <Box><Divider sx={{ mb: 1 }} /><Typography variant="subtitle2">Calls, sessions and feedback</Typography>
+        {!!related.length && <Box><Divider sx={{ mb: 1 }} /><Typography variant="subtitle2">{isAdmin ? 'Calls, sessions and feedback' : 'Calls, sessions and notes'}</Typography>
         {related.map(appointment => <Box key={appointment.id} sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="body2" fontWeight={600}>{appointment.appointmentKind === 'discovery' ? 'Discovery' : appointment.appointmentKind === 'follow_up' ? 'Follow-up' : 'Session'} · {appointment.date} {appointment.time} IST · {appointment.duration} min</Typography>
-            <Typography variant="body2">{appointment.counselorName} · {label(appointment.status)}</Typography>
+            <Typography variant="body2">{appointment.counselorName} · {statusLabel(sessionStatus(appointment, now))}</Typography>
             {appointment.purpose && <Typography variant="body2">Goal: {appointment.purpose}</Typography>}
             {appointment.reviewReason && <Typography variant="body2">Admin note: {appointment.reviewReason}</Typography>}
             {appointment.sessionNotes && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>Session notes: {appointment.sessionNotes}</Typography>}
             {!!appointment.sessionNoteHistory?.length && <Box component="details" sx={{ mt: 0.5 }}><Typography component="summary" variant="caption" sx={{ cursor: 'pointer' }}>Previous note versions ({appointment.sessionNoteHistory.length})</Typography>{appointment.sessionNoteHistory.map((entry, i) => <Typography key={`${entry.at}-${i}`} variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{new Date(entry.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} · {entry.actorName}: {entry.notes || '(empty note)'}</Typography>)}</Box>}
-            {appointment.review?.rating && <Typography variant="body2">Feedback: {appointment.review.rating}/5 — {appointment.review.reviewText || 'No written feedback'}</Typography>}
+            {(isAdmin || currentUser.id === appointment.patientId) && appointment.status === 'completed' && hasFeedback(appointment) && <Typography variant="body2">Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}
+            {(isAdmin || currentUser.id === appointment.patientId) && appointment.status === 'completed' && !hasFeedback(appointment) && <Typography variant="body2">{feedbackLabel(appointment)}</Typography>}
             <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              {appointment.status === 'upcoming' && <AttendSessionButton appointment={appointment} size="small" />}
-              {['upcoming', 'completed'].includes(appointment.status) && <Button component={Link} to={`/session/${appointment.id}`} size="small">Session notes</Button>}
+              {sessionStatus(appointment, now) === 'upcoming' && <AttendSessionButton appointment={appointment} size="small" />}
+              {['upcoming', 'awaiting_outcome', ...resolvedStatuses].includes(sessionStatus(appointment, now)) && <Button component={Link} to={`/session/${appointment.id}`} size="small">{sessionStatus(appointment, now) === 'awaiting_outcome' ? 'Confirm outcome / notes' : 'Session details / notes'}</Button>}
             </Stack>
           </Box>)}
         </Box>}

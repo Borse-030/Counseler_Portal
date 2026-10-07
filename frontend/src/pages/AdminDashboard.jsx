@@ -1,4 +1,6 @@
+import { hasFeedback } from '../utils/sessionOutcome';
 import AdminScheduleSession from '../components/AdminScheduleSession';
+import SessionOverview from '../components/SessionOverview';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -90,6 +92,12 @@ export default function AdminDashboard({ currentUser }) {
   const [activeTab, setActiveTab] = useState(0);
   const [users, setUsers] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => api.getAppointments().then(data => { if (active) setAppointments(data); }).catch(() => {});
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
+  }, []);
   const [careRequests, setCareRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -109,7 +117,6 @@ export default function AdminDashboard({ currentUser }) {
   const [archiveFilter, setArchiveFilter] = useState('all');
 
   // User creation dialog state
-  const [createOpen, setCreateOpen] = useState(false);
   const [createEmail, setCreateEmail] = useState('');
   const [createMobile, setCreateMobile] = useState('');
   const [createName, setCreateName] = useState('');
@@ -125,8 +132,7 @@ export default function AdminDashboard({ currentUser }) {
   const [createCounselorOpen, setCreateCounselorOpen] = useState(false)
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [deactivateUser, setDeactivateUser] = useState(null);
-const [deactivationReason, setDeactivationReason] = useState('');
+  const [, setDeactivateUser] = useState(null);
 
   const navigate = useNavigate()
 
@@ -162,7 +168,6 @@ const [deactivationReason, setDeactivationReason] = useState('');
       }
       await api.createAdminUser(payload);
       setSuccess(`${createRole.charAt(0).toUpperCase() + createRole.slice(1)} account created successfully.`);
-      setCreateOpen(false);
       setCreateCounselorOpen(false);
       // Clear forms
       setCreateEmail('');
@@ -287,7 +292,6 @@ const [deactivationReason, setDeactivationReason] = useState('');
   const openCase = (user, request, { schedule = false } = {}) => {
     setSelectedCase({ user, request });
     setDiscoveryDraft(request.discoveryNotes || '');
-    setAssignmentCounselorId(request.finalCounselorId || '');
     setScheduleOpen(schedule);
   };
 
@@ -361,14 +365,16 @@ const [deactivationReason, setDeactivationReason] = useState('');
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2.5 }}>
         <Tabs value={activeTab} onChange={(_, value) => selectSection(value)} variant="scrollable" scrollButtons="auto" aria-label="Admin directories" sx={{ minHeight: 46, '& .MuiTab-root': { minHeight: 46, px: 2, textTransform: 'none', fontWeight: 600, fontSize: 12 } }}>
           {sections.map((section, index) => <Tab id={`admin-tab-${index}`} aria-controls="admin-directory" key={section.label} label={<Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}><Typography component="span" sx={{ fontSize: 'inherit', fontWeight: 'inherit' }}>{section.label}</Typography><Chip component="span" size="small" label={section.count} sx={{ height: 20, minWidth: 22, fontSize: 10, bgcolor: activeTab === index ? 'primary.light' : 'action.hover', color: activeTab === index ? 'primary.dark' : 'text.secondary', '& .MuiChip-label': { px: 0.75 } }} /></Stack>} />)}
+          <Tab id="admin-tab-5" aria-controls="admin-directory" label="Sessions & feedback" />
         </Tabs>
       </Box>
 
       <Box id="admin-directory" role="tabpanel" aria-labelledby={`admin-tab-${activeTab}`}>
-        <Alert severity="info" sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5, fontSize: 12 }}>
+        {activeTab === 5 && <SessionOverview appointments={appointments} />}
+        <Alert severity="info" sx={{ display: activeTab === 5 ? 'none' : 'flex', mb: 2, border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5, fontSize: 12 }}>
           {activeTab === 0 ? 'Review new applications first. Approved users move to discovery before counselor assignment.' : activeTab === 1 ? 'Open a case to review discovery notes, then match a counselor and schedule a session.' : activeTab === 2 ? 'Review your active counseling panel, current assignments, and completed sessions.' : activeTab === 3 ? 'Record discovery observations and match each approved user with the right counselor.' : 'Review deactivated accounts and reactivate them when they are ready to return.'}
         </Alert>
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2, display: activeTab === 5 ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
           <TextField size="small" label={activeTab === 0 ? 'Search applications' : 'Search directory'} placeholder={activeTab === 0 ? 'Name, phone, email or intake note' : 'Name, email, phone or expertise'} value={activeTab === 0 ? requestQuery : userQuery} onChange={e => activeTab === 0 ? setRequestQuery(e.target.value) : setUserQuery(e.target.value)} sx={{ width: { xs: '100%', sm: 360 } }} slotProps={{ input: { startAdornment: <SearchIcon color="action" sx={{ mr: 1, fontSize: 18 }} /> } }} />
           {activeTab === 3 ? <TextField select size="small" label="Discovery stage" value={discoveryFilter} onChange={e => setDiscoveryFilter(e.target.value)} sx={{ minWidth: 190 }}><MenuItem value="all">All discovery cases</MenuItem><MenuItem value="pending">Discovery pending</MenuItem><MenuItem value="ready">Ready to assign</MenuItem></TextField> : activeTab === 4 ? <TextField select size="small" label="Account type" value={archiveFilter} onChange={e => setArchiveFilter(e.target.value)} sx={{ minWidth: 190 }}><MenuItem value="all">All deactivated accounts</MenuItem><MenuItem value="patients">Deactivated users</MenuItem><MenuItem value="counselors">Deactivated counselors</MenuItem></TextField> : <Typography variant="caption" color="text.secondary">{activeTab === 0 ? `${registrationRequests.length} awaiting review` : activeTab === 1 ? `${activePatients.length} approved users` : `${activeCounselors.length} active counselors`}</Typography>}
         </Paper>
@@ -451,7 +457,7 @@ const [deactivationReason, setDeactivationReason] = useState('');
           <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
             {!!currentCaseRequest.reviews?.length && <Stack spacing={1} sx={{ mb: 1.5 }}>{currentCaseRequest.reviews.map((review, index) => <Paper key={`${review.at}-${index}`} variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">Registration {review.decision === 'accepted' ? 'approved' : 'rejected'} · {new Date(review.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {review.actorName}</Typography>{review.reason && <Typography variant="body2">{review.reason}</Typography>}</Paper>)}</Stack>}
             {!!currentCaseRequest.timeline?.length && <Box component="details" sx={{ mb: 1.5 }}><Typography component="summary" variant="body2" fontWeight={650} sx={{ cursor: 'pointer', mb: 1 }}>Care timeline ({currentCaseRequest.timeline.length})</Typography>{[...currentCaseRequest.timeline].reverse().map((event, index) => <Typography key={`${event.at}-${index}`} variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>{new Date(event.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {event.actorName}: {event.note}</Typography>)}</Box>}
-            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{appointment.review?.rating && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.rating}/5 · {appointment.review.reviewText}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
+            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{hasFeedback(appointment) && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
           </Box>
           </Stack>
         </Stack>}
@@ -610,7 +616,7 @@ const [deactivationReason, setDeactivationReason] = useState('');
           </form>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateOpen(false)} disabled={createLoading}>Cancel</Button>
+          <Button onClick={() => setCreateCounselorOpen(false)} disabled={createLoading}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleCreateUser}

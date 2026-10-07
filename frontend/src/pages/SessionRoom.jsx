@@ -1,3 +1,6 @@
+import SessionOutcomeDialog from '../components/SessionOutcomeDialog';
+import { feedbackLabel, hasFeedback, resolvedStatuses, sessionStatus, statusLabel } from '../utils/sessionOutcome';
+import useSessionClock from '../hooks/useSessionClock';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Stack, TextField, Typography } from '@mui/material';
@@ -7,6 +10,8 @@ import SessionNotesHistory from '../components/SessionNotesHistory';
 import { attendanceLink, isOnlineMeetingLink } from '../utils/sessionAttendance';
 
 export default function SessionRoom({ currentUser }) {
+  const now = useSessionClock();
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
   const { id } = useParams();
   const [appointment, setAppointment] = useState(null);
   const [appointments, setAppointments] = useState([]);
@@ -28,7 +33,8 @@ export default function SessionRoom({ currentUser }) {
   const assigned = currentUser.role === 'counselor' && currentUser.id === appointment?.counselorId;
   const isAdmin = currentUser.role === 'admin';
   const staff = assigned || isAdmin;
-  const canAddNotes = assigned && ['upcoming', 'completed'].includes(appointment?.status);
+  const status = sessionStatus(appointment, now);
+  const canAddNotes = assigned && ['upcoming', 'awaiting_outcome', ...resolvedStatuses].includes(status);
   const update = async (changes, message) => {
     setBusy(true); setError(''); setSuccess('');
     try {
@@ -38,7 +44,7 @@ export default function SessionRoom({ currentUser }) {
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
-  const safeLink = attendanceLink(appointment);
+  const safeLink = status === 'upcoming' ? attendanceLink(appointment) : '';
   const offline = appointment?.appointmentType === 'In-Person Consultation';
   return <Container maxWidth="lg" sx={{ py: 4 }}><Stack spacing={3}>
     <Button component={Link} to={currentUser.role === 'admin' ? '/admin' : '/dashboard'} sx={{ alignSelf: 'flex-start' }}>Back to dashboard</Button>
@@ -49,11 +55,11 @@ export default function SessionRoom({ currentUser }) {
       <Typography variant="overline" color="primary">BJS internal counseling</Typography>
       <Typography variant="h4">{appointment.appointmentKind === 'discovery' ? 'Discovery call' : appointment.appointmentKind === 'follow_up' ? 'Follow-up call / session' : 'Counseling session'}</Typography>
       <Typography>{appointment.patientName} · {appointment.counselorName}</Typography>
-      <Typography color="text.secondary">{appointment.date} · {appointment.time} IST · {appointment.duration} minutes · {appointment.status.replaceAll('_', ' ')}</Typography>
+      <Typography color="text.secondary">{appointment.date} · {appointment.time} IST · {appointment.duration} minutes · {statusLabel(status)}</Typography>
       {appointment.status === 'pending_admin' || appointment.status === 'rejected' ? <Alert severity="warning">This session is not confirmed. {appointment.reviewReason}</Alert> : <>
-        {offline ? <Alert severity="info">Offline session at HO. Attend in person at the scheduled time.</Alert> : <Stack spacing={1}>
+        {offline ? <Alert severity="info">Offline session at HO.{status === 'upcoming' ? ' Attend in person at the scheduled time.' : ''}</Alert> : <Stack spacing={1}>
           {safeLink && <Button component="a" href={safeLink} target="_blank" rel="noopener noreferrer" variant="contained">Attend session</Button>}
-          {!safeLink && appointment.status === 'upcoming' && <Alert severity="warning">The admin needs to add a Zoom or Google Meet link before you can attend this online session.</Alert>}
+          {!safeLink && status === 'upcoming' && <Alert severity="warning">The admin needs to add a Zoom or Google Meet link before you can attend this online session.</Alert>}
         </Stack>}
         {isAdmin && !offline && appointment.status === 'upcoming' && <Box>
           <TextField fullWidth required type="url" label="Zoom or Google Meet link" value={meetingLink} disabled={busy} error={Boolean(meetingLink) && !isOnlineMeetingLink(meetingLink)} onChange={e => setMeetingLink(e.target.value)} />
@@ -65,12 +71,16 @@ export default function SessionRoom({ currentUser }) {
         </Box>}
         {staff && <SessionNotesHistory appointment={appointment} appointments={appointments} />}
         {isAdmin && appointment.status === 'upcoming' && <Stack direction="row" spacing={2}>
-          <Button disabled={busy} variant="contained" onClick={() => update({ status: 'completed' }, 'Session completed. Feedback is available after counseling sessions.')}>Mark completed</Button>
           <Button disabled={busy} color="error" onClick={() => update({ status: 'cancelled' }, 'Call / session cancelled.')}>Cancel session</Button>
         </Stack>}
-        {!staff && appointment.status === 'completed' && appointment.appointmentKind !== 'discovery' && <Alert severity="success">Please share your feedback from the Past journey tab on your dashboard.</Alert>}
+        {status === 'awaiting_outcome' && <Alert severity="warning">This session has ended and is awaiting attendance confirmation.{staff ? ' Confirm the outcome below.' : ' Your counselor will confirm the session outcome.'}</Alert>}
+        {staff && (status === 'awaiting_outcome' || (isAdmin && resolvedStatuses.includes(status))) && <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => setOutcomeOpen(true)}>{status === 'awaiting_outcome' ? 'Confirm session outcome' : 'Correct session outcome'}</Button>}
+        {staff && !!appointment.outcomeHistory?.length && <Box><Typography fontWeight={650}>Outcome history</Typography>{appointment.outcomeHistory.map((entry, i) => <Typography key={i} variant="body2" sx={{ mt: 1 }}>{statusLabel(entry.outcome)} · {entry.actorName} ({entry.actorRole}) · {new Date(entry.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}{entry.reason ? ' · ' + entry.reason : ''}</Typography>)}</Box>}
+        {!assigned && appointment.status === 'completed' && appointment.appointmentKind !== 'discovery' && <Box><Typography fontWeight={650}>{feedbackLabel(appointment)}</Typography>{hasFeedback(appointment) && <Typography variant="body2">{appointment.review.reviewText || 'No written feedback was provided.'} · {new Date(appointment.review.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</Typography>}</Box>}
+        {!staff && appointment.status === 'completed' && !hasFeedback(appointment) && appointment.appointmentKind !== 'discovery' && <Alert severity="success">Please share your feedback from the Past journey tab on your dashboard.</Alert>}
       </>}
     </Stack></CardContent></Card>}
+    {outcomeOpen && appointment && <SessionOutcomeDialog appointment={{ ...appointment, status }} isAdmin={isAdmin} onClose={() => setOutcomeOpen(false)} onSaved={updated => { setAppointment(updated); setOutcomeOpen(false); setSuccess('Session outcome recorded.'); }} />}
     {staff && appointment?.careRequestId && <CareWorkflow currentUser={currentUser} requestId={appointment.careRequestId} />}
   </Stack></Container>;
 }

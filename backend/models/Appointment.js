@@ -21,7 +21,7 @@ const AppointmentSchema = new mongoose.Schema({
   time: { type: String, required: true }, // HH:MM
   duration: { type: Number, default: 60 },
   amount: { type: Number, default: 0 },
-  status: { type: String, default: 'upcoming', enum: ['pending_admin', 'upcoming', 'completed', 'cancelled', 'rejected'] },
+  status: { type: String, default: 'upcoming', enum: ['pending_admin', 'upcoming', 'completed', 'user_absent', 'counselor_absent', 'both_absent', 'cancelled', 'rejected'] },
   purpose: { type: String, default: '' },
   reviewReason: { type: String, default: '' },
   reviewedById: { type: String, default: '' },
@@ -32,8 +32,15 @@ const AppointmentSchema = new mongoose.Schema({
   intakeNotes: { type: String, default: '' },
   sessionNotes: { type: String, default: '' },
   sessionNoteHistory: { type: [SessionNoteHistorySchema], default: [] },
+  outcomeRecordedAt: { type: Date },
+  outcomeRecordedById: { type: String, default: '' },
+  outcomeRecordedByName: { type: String, default: '' },
+  outcomeHistory: { type: [new mongoose.Schema({
+    previousStatus: String, outcome: String, actorId: String, actorName: String,
+    actorRole: String, reason: String, at: Date,
+  }, { _id: false })], default: [] },
+  feedbackRequestedAt: { type: Date },
   review: {
-    rating: { type: Number },
     reviewText: { type: String },
     date: { type: Date }
   }

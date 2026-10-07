@@ -1,3 +1,6 @@
+import SessionOutcomeDialog from '../components/SessionOutcomeDialog';
+import { resolvedStatuses, sessionStatus, statusLabel } from '../utils/sessionOutcome';
+import useSessionClock from '../hooks/useSessionClock';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Avatar, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, LinearProgress, MenuItem, Paper, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Typography } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
@@ -26,6 +29,8 @@ const tableStyles = {
 };
 
 export default function CounselorDashboard({ currentUser }) {
+  const now = useSessionClock();
+  const [outcomeAppointment, setOutcomeAppointment] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,17 +59,19 @@ export default function CounselorDashboard({ currentUser }) {
     return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh); };
   }, [load]);
 
-  const upcoming = appointments.filter(a => a.status === 'upcoming').sort(sessionSort);
+  const upcoming = appointments.filter(a => sessionStatus(a, now) === 'upcoming').sort(sessionSort);
+  const awaitingOutcome = appointments.filter(a => sessionStatus(a, now) === 'awaiting_outcome').sort(sessionSort);
+  const history = appointments.filter(a => resolvedStatuses.includes(a.status)).sort((a, b) => sessionSort(b, a));
   const completed = appointments.filter(a => a.status === 'completed').sort((a, b) => sessionSort(b, a));
   const activeCases = requests.filter(r => ['matched', 'active'].includes(r.status));
   const todaySessions = upcoming.filter(a => a.date === todayIST());
   const pendingNotes = completed.filter(a => !a.sessionNotes?.trim());
-  const nextSession = upcoming.find(a => new Date(`${a.date}T${a.time}:00+05:30`) >= new Date());
+  const nextSession = upcoming[0];
   const matchesQuery = values => values.some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase()));
   const visibleCases = requests.filter(r => caseFilter === 'all' || (caseFilter === 'active' ? ['matched', 'active'].includes(r.status) : r.status === 'closed')).filter(r => matchesQuery([r.patientName, r.intakeNotes, r.discoveryNotes, r.preferredFormat]));
   const visibleUpcoming = upcoming.filter(a => (!scheduleDate || a.date === scheduleDate) && matchesQuery([a.patientName, a.purpose, a.intakeNotes, a.appointmentType]));
-  const visibleCompleted = completed.filter(a => (notesFilter !== 'pending' || !a.sessionNotes?.trim()) && matchesQuery([a.patientName, a.sessionNotes, a.purpose]));
-  const sections = ['Assigned cases', 'Upcoming sessions & calendar', 'Completed consultations & notes', 'Availability'];
+  const visibleCompleted = history.filter(a => (notesFilter === 'all' || (notesFilter === 'pending' ? a.status === 'completed' && !a.sessionNotes?.trim() : notesFilter === 'missed' ? a.status !== 'completed' : a.status === 'completed')) && matchesQuery([a.patientName, a.sessionNotes, a.purpose]));
+  const sections = ['Assigned cases', 'Upcoming sessions & calendar', 'Session history & notes', 'Availability', `Awaiting outcome (${awaitingOutcome.length})`];
   const selectTab = value => { setActiveTab(value); setQuery(''); setScheduleDate(''); setNotesFilter('all'); setCaseFilter('active'); };
   const tiles = [
     { label: 'Completed sessions', count: completed.length, hint: 'Completed consultations and notes', icon: CheckCircleOutlineIcon, tab: 2, color: 'primary.main' },
@@ -98,6 +105,7 @@ export default function CounselorDashboard({ currentUser }) {
     </Paper>
     {error && !noteAppointment && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+    {!!awaitingOutcome.length && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => selectTab(4)}>Review outcomes</Button>}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended and need attendance confirmation.</Alert>}
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 1.5, mb: 2.5 }}>
       {tiles.map((tile, i) => {
         const Icon = tile.icon;
@@ -140,11 +148,20 @@ export default function CounselorDashboard({ currentUser }) {
         </Paper>)}
       </Stack>}
       {activeTab === 2 && <Stack spacing={2}>
-        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}><Typography sx={{ fontWeight: 700 }}>Completed consultations & notes</Typography><TextField select size="small" label="Documentation" value={notesFilter} onChange={e => setNotesFilter(e.target.value)} sx={{ minWidth: 180 }}><MenuItem value="all">All completed sessions</MenuItem><MenuItem value="pending">Pending notes</MenuItem></TextField></Paper>
-        <TableContainer component={Paper} variant="outlined" sx={tableStyles}><Table sx={{ minWidth: 840 }}><TableHead><TableRow>{['Patient / client', 'Session / topic', 'Date & duration', 'Note status', 'Patient feedback', 'Actions'].map(label => <TableCell key={label} align={label === 'Actions' ? 'right' : 'left'}>{label}</TableCell>)}</TableRow></TableHead><TableBody>{visibleCompleted.map(apt => <TableRow key={apt.id} hover><TableCell><Typography variant="body2" sx={{ fontWeight: 650 }}>{apt.patientName}</Typography></TableCell><TableCell><Typography variant="body2">{apt.purpose || apt.appointmentKind?.replaceAll('_', ' ') || 'Counseling session'}</Typography><Typography variant="caption" color="text.secondary">{modeLabel(apt.appointmentType)}</Typography></TableCell><TableCell><Typography variant="body2">{apt.date} · {apt.time}</Typography><Typography variant="caption" color="text.secondary">{apt.duration || 60} minutes</Typography></TableCell><TableCell><Chip size="small" color={apt.sessionNotes?.trim() ? 'success' : 'warning'} variant="outlined" label={apt.sessionNotes?.trim() ? 'Notes saved' : 'Pending notes'} /></TableCell><TableCell><Typography variant="caption" color="text.secondary">{apt.review?.rating ? `${apt.review.rating}/5 · ${apt.review.reviewText || 'Rating received'}` : 'Not received'}</Typography></TableCell><TableCell align="right"><Button size="small" variant={apt.sessionNotes?.trim() ? 'outlined' : 'contained'} onClick={() => openNotes(apt)}>{apt.sessionNotes?.trim() ? 'View / edit notes' : 'Write notes'}</Button></TableCell></TableRow>)}{!visibleCompleted.length && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}>No completed sessions match this view.</TableCell></TableRow>}</TableBody></Table></TableContainer>
+        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}><Typography sx={{ fontWeight: 700 }}>Session history & notes</Typography><TextField select size="small" label="Documentation" value={notesFilter} onChange={e => setNotesFilter(e.target.value)} sx={{ minWidth: 180 }}><MenuItem value="all">All recorded outcomes</MenuItem><MenuItem value="completed">Completed sessions</MenuItem><MenuItem value="missed">Missed sessions</MenuItem><MenuItem value="pending">Pending notes</MenuItem></TextField></Paper>
+        <TableContainer component={Paper} variant="outlined" sx={tableStyles}><Table sx={{ minWidth: 840 }}><TableHead><TableRow>{['Patient / client', 'Session / outcome', 'Date & duration', 'Note status', 'Actions'].map(label => <TableCell key={label} align={label === 'Actions' ? 'right' : 'left'}>{label}</TableCell>)}</TableRow></TableHead><TableBody>{visibleCompleted.map(apt => <TableRow key={apt.id} hover><TableCell><Typography variant="body2" sx={{ fontWeight: 650 }}>{apt.patientName}</Typography></TableCell><TableCell><Typography variant="body2">{apt.purpose || apt.appointmentKind?.replaceAll('_', ' ') || 'Counseling session'}</Typography><Typography variant="caption" color="text.secondary">{modeLabel(apt.appointmentType)}</Typography><Chip size="small" sx={{ display: 'flex', width: 'fit-content', mt: 0.5 }} variant="outlined" color={apt.status === 'completed' ? 'success' : 'warning'} label={statusLabel(apt.status)} /></TableCell><TableCell><Typography variant="body2">{apt.date} · {apt.time}</Typography><Typography variant="caption" color="text.secondary">{apt.duration || 60} minutes</Typography></TableCell><TableCell><Chip size="small" color={apt.sessionNotes?.trim() ? 'success' : 'warning'} variant="outlined" label={apt.sessionNotes?.trim() ? 'Notes saved' : 'Pending notes'} /></TableCell><TableCell align="right"><Button size="small" variant={apt.sessionNotes?.trim() ? 'outlined' : 'contained'} onClick={() => openNotes(apt)}>{apt.sessionNotes?.trim() ? 'View / edit notes' : 'Write notes'}</Button></TableCell></TableRow>)}{!visibleCompleted.length && <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}>No recorded sessions match this view.</TableCell></TableRow>}</TableBody></Table></TableContainer>
       </Stack>}
       {activeTab === 3 && <CounselorAvailability counselorId={currentUser.id} />}
+      {activeTab === 4 && <Stack spacing={2}>
+        <Paper variant="outlined" sx={{ p: 2 }}><Typography fontWeight={700}>Awaiting session outcome</Typography><Typography variant="body2" color="text.secondary">The scheduled end time has passed. Confirm attendance to complete the session or record who was absent.</Typography></Paper>
+        {awaitingOutcome.filter(a => matchesQuery([a.patientName, a.purpose])).map(apt => <Paper variant="outlined" key={apt.id} sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+          <Box><Typography fontWeight={650}>{apt.patientName}</Typography><Typography variant="body2" color="text.secondary">{formatDate(apt.date)} · {apt.time} IST · {apt.duration || 60} min · {modeLabel(apt.appointmentType)}</Typography><Chip size="small" color="warning" variant="outlined" sx={{ mt: 1 }} label="Awaiting outcome" /></Box>
+          <Stack direction="row" spacing={1}><Button variant="outlined" onClick={() => openNotes(apt)}>Notes</Button><Button variant="contained" onClick={() => setOutcomeAppointment({ ...apt, status: sessionStatus(apt, now) })}>Confirm outcome</Button></Stack>
+        </Paper>)}
+        {!awaitingOutcome.length && <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>No sessions are awaiting an outcome.</Typography>}
+      </Stack>}
     </Box>
+    {outcomeAppointment && <SessionOutcomeDialog appointment={outcomeAppointment} onClose={() => setOutcomeAppointment(null)} onSaved={updated => { setAppointments(previous => previous.map(a => a.id === updated.id ? updated : a)); setOutcomeAppointment(null); setSuccess('Session outcome recorded.'); }} />}
     <Dialog open={Boolean(caseId)} onClose={() => setCaseId('')} fullWidth maxWidth="md"><DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>Assigned case<IconButton aria-label="Close case" onClick={() => setCaseId('')}><CloseIcon /></IconButton></DialogTitle><DialogContent dividers>{caseId && <CareWorkflow currentUser={currentUser} requestId={caseId} filter={3} onAppointmentsChange={setAppointments} onRequestsChange={setRequests} />}</DialogContent></Dialog>
     <Dialog open={Boolean(noteAppointment)} onClose={() => !busy && setNoteAppointment(null)} fullWidth maxWidth="sm"><DialogTitle>Session notes · {noteAppointment?.patientName}</DialogTitle><DialogContent dividers><Stack spacing={2}>{error && <Alert severity="error">{error}</Alert>}<Typography variant="body2" color="text.secondary">{noteAppointment?.date} · {noteAppointment?.time} IST · {noteAppointment && modeLabel(noteAppointment.appointmentType)}</Typography><Paper variant="outlined" sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">Intake / session goal</Typography><Typography variant="body2">{noteAppointment?.purpose || noteAppointment?.intakeNotes || 'No additional intake details.'}</Typography></Paper><TextField fullWidth multiline minRows={6} label="Clinical progress notes" value={notes} disabled={busy} onChange={e => setNotes(e.target.value)} />{noteAppointment && <SessionNotesHistory appointment={noteAppointment} appointments={appointments} />}</Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setNoteAppointment(null)}>Close</Button><Button variant="contained" disabled={busy || !notes.trim() || notes === (noteAppointment?.sessionNotes || '')} onClick={saveNotes}>{busy ? 'Saving…' : 'Save notes'}</Button></DialogActions></Dialog>
   </Container>;

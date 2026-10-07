@@ -1,19 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { feedbackEligible, hasFeedback, resolvedStatuses, sessionStatus, statusLabel } from '../utils/sessionOutcome';
+import useSessionClock from '../hooks/useSessionClock';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Container, Typography, Grid, Card, CardContent, Button, Tabs, Tab,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Dialog, DialogTitle, DialogContent, DialogActions, Rating, TextField,
-  Chip, CircularProgress, Alert, Divider, Avatar, Step, StepLabel, Stepper
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  Chip, CircularProgress, Alert, Divider, Avatar, Step, StepLabel, Stepper, Stack
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import VideoCallIcon from '@mui/icons-material/VideoCall';
 import RateReviewIcon from '@mui/icons-material/RateReview';
-import StarIcon from '@mui/icons-material/Star';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { api } from '../api';
 import AttendSessionButton from '../components/AttendSessionButton';
 
@@ -30,60 +32,16 @@ const getAppointmentDateParts = (dateValue) => {
   };
 };
 
-const createDemoAppointments = () => {
-  const dateInDays = (daysFromNow) => {
-    const date = new Date();
-    date.setDate(date.getDate() + daysFromNow);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  };
-
-  return [
-    {
-      id: 'demo-session-next',
-      status: 'upcoming',
-      counselorName: 'Dr. Ananya Sen',
-      counselorSpecialty: 'CBT Specialist',
-      date: dateInDays(3),
-      time: '4:00 PM',
-      duration: 50,
-      appointmentType: 'Online Consultation',
-      isDemo: true,
-    },
-    {
-      id: 'demo-session-following',
-      status: 'upcoming',
-      counselorName: 'Dr. Sameer Joshi',
-      counselorSpecialty: 'Clinical Psychologist',
-      date: dateInDays(8),
-      time: '11:00 AM',
-      duration: 50,
-      appointmentType: 'In-Person Consultation',
-      clinicAddress: 'Counselling Program Wellness Center, Pune',
-      isDemo: true,
-    },
-  ];
-};
-
-const createDemoSessionRequests = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 10);
-  return [{
-    id: 'demo-request-pending',
-    status: 'submitted',
-    patientName: 'You',
-    preferredDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
-    preferredTime: 'Afternoon',
-    preferredFormat: 'Online Consultation',
-    intakeNotes: 'Support with stress and sleep.',
-    assignedCounselorName: '',
-    rejectedReason: '',
-    isDemo: true,
-  }];
-};
-
 export default function PatientDashboard({ currentUser, onUserUpdated }) {
+  const now = useSessionClock();
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => api.getAppointments().then(data => { if (active) setAppointments(data); }).catch(() => {});
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
+  }, []);
   const [sessionRequests, setSessionRequests] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,10 +53,10 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   // Review Dialog State
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedApt, setSelectedApt] = useState(null);
-  const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [reviewError, setReviewError] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  const savingReview = useRef(false);
 
   // Receipt Modal State
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -135,35 +93,38 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
 
   const handleOpenReview = (apt) => {
     setSelectedApt(apt);
-    setRating(5);
     setReviewText('');
     setReviewError('');
     setReviewOpen(true);
   };
 
   const handleCloseReview = () => {
-    setReviewOpen(false);
+    if (!savingReview.current) setReviewOpen(false);
   };
 
   const handleReviewSubmit = async () => {
-    if (!reviewText) {
-      setReviewError('Please write a short comment about your experience.');
+    if (savingReview.current) return;
+    if (!reviewText.trim()) {
+      setReviewError('Please write your feedback about the session.');
+      return;
+    }
+    if (reviewText.length > 2000) {
+      setReviewError('Please keep your comment under 2,000 characters.');
       return;
     }
 
     try {
+      savingReview.current = true;
       setReviewLoading(true);
       setReviewError('');
-      await api.submitReview(selectedApt.id, rating, reviewText);
-
-      // Reload dashboard appointments
-      const updated = await api.getAppointments();
-      setAppointments(updated);
+      const result = await api.submitReview(selectedApt.id, reviewText.trim());
+      setAppointments(previous => previous.map(apt => apt.id === selectedApt.id ? { ...apt, review: result.review } : apt));
 
       setReviewOpen(false);
     } catch (err) {
       setReviewError(err.message || 'Failed to submit review.');
     } finally {
+      savingReview.current = false;
       setReviewLoading(false);
     }
   };
@@ -204,8 +165,10 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   // Calculated metrics
   const activeRequestStatuses = ['submitted', 'assigned', 'accepted', 'rejected', 'discovery_scheduled', 'discovery_completed', 'active'];
   const requestedApts = sessionRequests.filter((request) => activeRequestStatuses.includes(request.status));
-  const upcomingApts = appointments.filter(a => a.status === 'upcoming');
-  const pastApts = appointments.filter(a => ['completed', 'cancelled', 'rejected'].includes(a.status));
+  const upcomingApts = appointments.filter(a => sessionStatus(a, now) === 'upcoming');
+  const awaitingOutcome = appointments.filter(a => sessionStatus(a, now) === 'awaiting_outcome');
+  const feedbackPending = appointments.filter(a => feedbackEligible(a) && !hasFeedback(a));
+  const pastApts = appointments.filter(a => [...resolvedStatuses, 'awaiting_outcome', 'cancelled', 'rejected'].includes(sessionStatus(a, now)));
   const profileGroups = [
     {
       title: 'About you',
@@ -244,6 +207,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
+      {!!feedbackPending.length && <Alert severity="info" sx={{ mb: 2 }} action={<Button size="small" onClick={() => handleOpenReview(feedbackPending[0])}>Add feedback</Button>}>{feedbackPending.length} completed session{feedbackPending.length === 1 ? '' : 's'} awaiting your feedback.</Alert>}
+      {!!awaitingOutcome.length && <Alert severity="info" sx={{ mb: 2 }}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended. Your counselor will confirm attendance before feedback becomes available. See Past journey for the status.</Alert>}
       <Card sx={{ mb: 3, borderRadius: 3, overflow: 'hidden' }}>
         <Grid container>
           <Grid size={{ xs: 12, md: 3 }}>
@@ -674,8 +639,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                               <Stack
                                 direction="row"
                                 spacing={1.25}
-                                alignItems="center"
                                 sx={{
+                                  alignItems: 'center',
                                   mt: 1.25,
                                   flexWrap: 'wrap',
                                 }}
@@ -759,48 +724,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                                 flexDirection: { xs: 'row', md: 'column' },
                               }}
                             >
-                              {!apt.isDemo &&
-                                apt.appointmentType !== 'In-Person Consultation' ? (
-                                <Button
-                                  variant="contained"
-                                  fullWidth
-                                  startIcon={<VideoCallIcon />}
-                                  onClick={() => handleJoinSession(apt.id)}
-                                  sx={{
-                                    flex: 1,
-                                    textTransform: 'none',
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  Join Video Consultation
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="contained"
-                                  fullWidth
-                                  disabled
-                                  sx={{
-                                    flex: 1,
-                                    textTransform: 'none',
-                                  }}
-                                >
-                                  {apt.isDemo ? 'Sample Session' : 'View Location'}
-                                </Button>
-                              )}
-
-                              <Button
-                                variant="outlined"
-                                fullWidth
-                                startIcon={<DescriptionOutlinedIcon />}
-                                sx={{
-                                  flex: 1,
-                                  textTransform: 'none',
-                                  fontWeight: 600,
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Agenda & Notes
-                              </Button>
+                              <AttendSessionButton appointment={apt} variant="contained" fullWidth />
+                              <Button variant="outlined" fullWidth startIcon={<DescriptionOutlinedIcon />} onClick={() => navigate('/session/' + apt.id)}>Session details</Button>
                             </Box>
                           </Box>
                         </CardContent>
@@ -939,19 +864,14 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{apt.counselorName}</Typography>
                           <Typography variant="body2" color="text.secondary">{apt.counselorSpecialty}</Typography>
                         </Box>
-                        <Chip label={apt.status} color={apt.status === 'completed' ? 'success' : 'error'} variant="outlined" size="small" />
+                        <Chip label={statusLabel(sessionStatus(apt, now))} color={apt.status === 'completed' ? 'success' : 'warning'} variant="outlined" size="small" />
                       </Box>
                       <Divider sx={{ my: 1.5 }} />
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>{apt.date} · {apt.time}</Typography>
-                        {apt.status === 'completed' && apt.appointmentKind !== 'discovery' && (apt.review ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <StarIcon sx={{ color: 'warning.main', fontSize: 18 }} />
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>{apt.review.rating}/5</Typography>
-                          </Box>
-                        ) : (
-                          <Button variant="outlined" size="small" startIcon={<RateReviewIcon />} onClick={() => handleOpenReview(apt)}>Share feedback</Button>
-                        ))}
+                        {feedbackEligible(apt) && (hasFeedback(apt) ? (
+                          <Box sx={{ width: '100%' }}><Typography variant="caption" color="text.secondary">Your feedback · {new Date(apt.review.date).toLocaleDateString('en-IN')}</Typography><Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{apt.review.reviewText || 'No written feedback was provided.'}</Typography></Box>
+                        ) : <Button variant="outlined" size="small" startIcon={<RateReviewIcon />} onClick={() => handleOpenReview(apt)}>Share feedback</Button>)}
                       </Box>
                     </CardContent>
                   </Card>
@@ -1035,25 +955,19 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
       {/* WRITE A REVIEW DIALOG */}
       <Dialog open={reviewOpen} onClose={handleCloseReview} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>
-          Write Session Review
+          Share session feedback
         </DialogTitle>
         <DialogContent dividers sx={{ py: 3 }}>
           {reviewError && <Alert severity="error" sx={{ mb: 2 }}>{reviewError}</Alert>}
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Your feedback helps our community. Rate your therapy experience with <strong>{selectedApt?.counselorName}</strong>.
+            Tell us about your session with <strong>{selectedApt?.counselorName}</strong>. Only you and the admin care team can read your feedback.
           </Typography>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, my: 2 }}>
-            <Typography variant="subtitle2">Rating</Typography>
-            <Rating
-              value={rating}
-              onChange={(e, val) => setRating(val || 5)}
-              size="large"
-            />
-          </Box>
-
           <TextField
-            label="Review Comments"
+            required
+            label="Session feedback"
+            helperText="Up to 2,000 characters."
+            slotProps={{ htmlInput: { maxLength: 2000 } }}
             multiline
             rows={3}
             fullWidth
@@ -1068,9 +982,9 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
           <Button
             variant="contained"
             onClick={handleReviewSubmit}
-            disabled={reviewLoading}
+            disabled={reviewLoading || !reviewText.trim() || reviewText.length > 2000}
           >
-            {reviewLoading ? <CircularProgress size={24} /> : 'Submit Review'}
+            {reviewLoading ? <CircularProgress size={24} /> : 'Submit feedback'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,3 +1,4 @@
+import { sessionEndTime, resolvedStatuses, presentAppointment, hasFeedback } from '../utils/sessionOutcome.js';
 import { User, Appointment, CareRequest, Transaction, AppointmentType, AuditLog } from '../models/index.js';
 import { sendNotification } from '../utils/notificationService.js';
 import { validateSchedule, validOnlineMeetingLink } from '../utils/scheduling.js';
@@ -45,7 +46,7 @@ export const getAppointments = async (req, res) => {
       return dateTimeA - dateTimeB;
     });
 
-    res.json(filtered);
+    res.json(filtered.map(apt => presentAppointment(apt, currentUser)));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -59,14 +60,9 @@ export const getAppointmentById = async (req, res) => {
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    if (apt.patientId !== req.userId && apt.counselorId !== req.userId) {
-      const u = await User.findOne({ id: req.userId });
-      if (!u || u.role !== 'admin') {
-        return res.status(403).json({ message: 'Forbidden access to session details' });
-      }
-    }
-
-    res.json(apt);
+    const actor = await User.findOne({ id: req.userId });
+    if (!actor || !(actor.role === 'admin' || (['patient', 'user'].includes(actor.role) && apt.patientId === actor.id) || (actor.role === 'counselor' && apt.counselorId === actor.id))) return res.status(403).json({ message: 'Forbidden access to session details' });
+    res.json(presentAppointment(apt, actor));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -207,6 +203,7 @@ export const rescheduleAppointment = async (req, res) => {
       }
     }
 
+    if (apt.status === 'completed' || hasFeedback(apt)) return res.status(409).json({ message: 'Completed sessions keep their original record. Schedule a new session instead.' });
     const rescheduleNoticeHours = 24;
     const aptDateTime = new Date(`${apt.date}T${apt.time}`);
     const now = new Date();
@@ -250,7 +247,7 @@ export const rescheduleAppointment = async (req, res) => {
     await sendNotification(apt.patientId, `Your appointment with ${apt.counselorName} has been rescheduled to ${date} at ${time}.`);
     await sendNotification(apt.counselorId, `Rescheduled Booking: Patient ${apt.patientName} has rescheduled the session to ${date} at ${time}.`);
 
-    res.json({ message: 'Appointment rescheduled successfully', appointment: apt });
+    res.json({ message: 'Appointment rescheduled successfully', appointment: presentAppointment(apt, actor) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -268,6 +265,7 @@ export const cancelAppointment = async (req, res) => {
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
+    if (resolvedStatuses.includes(apt.status)) return res.status(409).json({ message: 'Resolved sessions cannot be cancelled. An admin can correct the outcome instead.' });
     if (apt.status === 'cancelled') {
       return res.status(400).json({ message: 'Appointment is already cancelled.' });
     }
@@ -322,7 +320,7 @@ export const cancelAppointment = async (req, res) => {
 
     res.json({
       message: `Appointment cancelled successfully. ${refundPercentage}% refund ($${refundAmt}) processed.`,
-      appointment: apt,
+      appointment: presentAppointment(apt, actor),
       refundAmount: refundAmt,
       refundPercentage
     });
@@ -333,8 +331,15 @@ export const cancelAppointment = async (req, res) => {
 
 export const updateAppointment = async (req, res) => {
   const { status, sessionNotes, meetingLink } = req.body;
-
   try {
+    // Keep older admin clients on the same guarded completion workflow.
+    if (status === 'completed') {
+      const actor = await User.findOne({ id: req.userId });
+      if (actor?.role !== 'admin') return res.status(403).json({ message: 'Use the session outcome workflow to confirm attendance.' });
+      if (Object.keys(req.body).length !== 1) return res.status(400).json({ message: 'Record the outcome separately from other changes.' });
+      req.body = { outcome: 'completed' };
+      return recordSessionOutcome(req, res);
+    }
     const apt = await Appointment.findOne({ id: req.params.id });
 
     if (!apt) {
@@ -373,10 +378,11 @@ export const updateAppointment = async (req, res) => {
       if (!isAssignedCounselor) {
         return res.status(403).json({ message: 'Only the counselor can update clinical session notes.' });
       }
-      if (!['upcoming', 'completed'].includes(apt.status)) return res.status(409).json({ message: 'Notes can only be added to confirmed or completed sessions.' });
+      if (!['upcoming', ...resolvedStatuses].includes(apt.status)) return res.status(409).json({ message: 'Notes can only be added to scheduled or resolved sessions.' });
       if (typeof sessionNotes !== 'string' || sessionNotes.length > 20000) {
         return res.status(400).json({ message: 'Session notes must be under 20,000 characters.' });
       }
+      if (sessionNotes === (apt.sessionNotes || '')) return res.json({ message: 'Session notes are unchanged.', appointment: presentAppointment(apt, actor) });
       if (!Array.isArray(apt.sessionNoteHistory)) apt.sessionNoteHistory = [];
       apt.sessionNoteHistory.push({ notes: apt.sessionNotes || '', actorId: actor.id, actorName: actor.name, at: new Date() });
       apt.sessionNotes = sessionNotes;
@@ -384,80 +390,72 @@ export const updateAppointment = async (req, res) => {
 
     await apt.save();
 
-    if (apt.appointmentKind === 'discovery' && status === 'completed' && apt.careRequestId) {
-      const careRequest = await CareRequest.findOne({ id: apt.careRequestId, assignedCounselorId: apt.counselorId });
-      if (careRequest && careRequest.status === 'discovery_scheduled') {
-        careRequest.status = 'discovery_completed';
-        careRequest.timeline.push({
-          status: 'discovery_completed',
-          actorId: actor.id,
-          actorName: actor.name,
-          note: 'Discovery call completed.',
-          at: new Date(),
-        });
-        await careRequest.save();
-        await sendNotification(careRequest.patientId, 'Your discovery call is complete. Your counselor will follow up with the next session.');
-      }
-    }
-
-    res.json({ message: 'Appointment updated successfully', appointment: apt });
+    res.json({ message: 'Appointment updated successfully', appointment: presentAppointment(apt, actor) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-export const submitReview = async (req, res) => {
-  const { rating, reviewText } = req.body;
 
+export const recordSessionOutcome = async (req, res) => {
+  try {
+    const actor = await User.findOne({ id: req.userId });
+    const apt = await Appointment.findOne({ id: req.params.id });
+    if (!actor) return res.status(401).json({ message: 'User not found.' });
+    if (!apt) return res.status(404).json({ message: 'Appointment not found.' });
+    const isAdmin = actor.role === 'admin';
+    if (!isAdmin && !(actor.role === 'counselor' && actor.id === apt.counselorId)) return res.status(403).json({ message: 'Only the assigned counselor or an admin can record the outcome.' });
+    const { outcome, reason = '', expectedStatus, expectedRecordedAt } = req.body;
+    if (!resolvedStatuses.includes(outcome)) return res.status(400).json({ message: 'Choose a valid attendance outcome.' });
+    if (typeof reason !== 'string' || reason.length > 1000) return res.status(400).json({ message: 'Attendance notes must be under 1,000 characters.' });
+    if (!Number.isFinite(sessionEndTime(apt)) || sessionEndTime(apt) > Date.now()) return res.status(409).json({ message: 'Confirm the outcome after the scheduled session end time (IST).' });
+    if (!['upcoming', ...resolvedStatuses].includes(apt.status)) return res.status(409).json({ message: 'Only scheduled or resolved sessions can have an outcome.' });
+    if (apt.status === outcome) return res.json({ message: 'This outcome is already recorded.', appointment: presentAppointment(apt, actor) });
+    const correction = resolvedStatuses.includes(apt.status);
+    if (correction && !isAdmin) return res.status(403).json({ message: 'Only an admin can correct a recorded outcome.' });
+    if (correction && !reason.trim()) return res.status(400).json({ message: 'Explain why the recorded outcome needs correcting.' });
+    const presented = presentAppointment(apt, actor);
+    if ((expectedStatus && expectedStatus !== presented.status) || (expectedRecordedAt !== undefined && String(expectedRecordedAt || '') !== String(apt.outcomeRecordedAt?.toISOString() || ''))) return res.status(409).json({ message: 'The outcome changed. Refresh this session before making a correction.' });
+    const at = new Date();
+    const requestFeedback = outcome === 'completed' && apt.appointmentKind !== 'discovery' && !apt.feedbackRequestedAt && !hasFeedback(apt);
+    const fields = { status: outcome, outcomeRecordedAt: at, outcomeRecordedById: actor.id, outcomeRecordedByName: actor.name };
+    if (requestFeedback) fields.feedbackRequestedAt = at;
+    const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, duration: apt.duration, outcomeRecordedAt: apt.outcomeRecordedAt || null }, {
+      $set: fields,
+      $push: { outcomeHistory: { previousStatus: presented.status, outcome, actorId: actor.id, actorName: actor.name, actorRole: actor.role, reason: reason.trim(), at } },
+    }, { new: true, runValidators: true });
+    if (!updated) return res.status(409).json({ message: 'Another person recorded an outcome. Refresh this session.' });
+    if (requestFeedback) await sendNotification(apt.patientId, 'Your counseling session with ' + apt.counselorName + ' on ' + apt.date + ' is completed. Please share your feedback from your dashboard (Past journey).');
+    if (apt.appointmentKind === 'discovery' && outcome === 'completed' && apt.careRequestId) {
+      const request = await CareRequest.findOne({ id: apt.careRequestId, assignedCounselorId: apt.counselorId });
+      if (request?.status === 'discovery_scheduled') {
+        request.status = 'discovery_completed';
+        request.timeline.push({ status: 'discovery_completed', actorId: actor.id, actorName: actor.name, note: 'Discovery call completed.', at });
+        await request.save();
+      }
+    }
+    await logAction(actor.id, 'Recorded session outcome ' + apt.id + ': ' + outcome + (correction ? ' (correction)' : ''), req);
+    res.json({ message: 'Session outcome recorded.', appointment: presentAppointment(updated, actor) });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};
+
+export const submitReview = async (req, res) => {
+  const { reviewText } = req.body;
   try {
     const apt = await Appointment.findOne({ id: req.params.id });
-
-    if (!apt) {
-      return res.status(404).json({ message: 'Appointment not found' });
-    }
-
-    if (apt.patientId !== req.userId) {
-      return res.status(403).json({ message: 'Only the patient can review this appointment.' });
-    }
-
-    if (apt.status !== 'completed') {
-      return res.status(400).json({ message: 'Reviews can only be written for completed sessions.' });
-    }
-
-    if (apt.appointmentKind === 'discovery') {
-      return res.status(400).json({ message: 'Discovery calls cannot be reviewed as counseling sessions.' });
-    }
-
-    if (apt.review && apt.review.rating) {
-      return res.status(400).json({ message: 'You have already reviewed this session.' });
-    }
-
-    const newReview = {
-      rating: Number(rating) || 5,
-      reviewText: reviewText || '',
-      date: new Date()
-    };
-
-    apt.review = newReview;
-    await apt.save();
-
-    const counselor = await User.findOne({ id: apt.counselorId, role: 'counselor' });
-
-    if (counselor) {
-      const allAptsWithReview = await Appointment.find({ counselorId: counselor.id, review: { $ne: null } });
-      const sumRatings = allAptsWithReview.reduce((sum, current) => sum + current.review.rating, 0);
-      const count = allAptsWithReview.length;
-
-      counselor.rating = count > 0 ? Number((sumRatings / count).toFixed(1)) : 5.0;
-      counselor.reviewCount = count;
-
-      await counselor.save();
-    }
-
-    await logAction(req.userId, `Submitted ${rating}-star feedback for ${apt.counselorName}`, req);
-
-    res.json({ message: 'Review submitted successfully', review: newReview });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    if (!apt) return res.status(404).json({ message: 'Appointment not found.' });
+    if (apt.patientId !== req.userId) return res.status(403).json({ message: 'Only the session user can submit feedback.' });
+    if (apt.status !== 'completed' || apt.appointmentKind === 'discovery') return res.status(400).json({ message: 'Feedback is available only for completed counseling sessions.' });
+    if (hasFeedback(apt)) return res.status(409).json({ message: 'You have already submitted feedback for this session.' });
+    if (typeof reviewText !== 'string' || !reviewText.trim() || reviewText.length > 2000) return res.status(400).json({ message: 'Write your session feedback (up to 2,000 characters).' });
+    if (req.body.rating !== undefined) return res.status(400).json({ message: 'Session feedback is text only. Ratings are not accepted.' });
+    const newReview = { reviewText: reviewText.trim(), date: new Date() };
+    const saved = await Appointment.findOneAndUpdate({
+      id: apt.id, patientId: req.userId, status: 'completed', 'review.date': { $exists: false },
+      $or: [{ 'review.reviewText': { $exists: false } }, { 'review.reviewText': null }, { 'review.reviewText': { $regex: '^\s*$' } }],
+    }, { $set: { review: newReview } }, { new: true, runValidators: true });
+    if (!saved) return res.status(409).json({ message: 'Feedback was already submitted or the session outcome changed. Refresh your dashboard.' });
+    await logAction(req.userId, 'Submitted written session feedback for ' + apt.counselorName, req);
+    res.json({ message: 'Feedback submitted successfully.', review: newReview });
+  } catch (error) { res.status(500).json({ message: error.message }); }
 };

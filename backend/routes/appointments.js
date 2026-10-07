@@ -6,7 +6,8 @@ import {
   rescheduleAppointment,
   cancelAppointment,
   updateAppointment,
-  submitReview
+  submitReview,
+  recordSessionOutcome
 } from '../controllers/appointmentController.js';
 import { getUserIdFromToken } from '../utils/security.js';
 
@@ -33,6 +34,7 @@ router.post('/', authenticate, createAppointment);
 router.post('/:id/reschedule', authenticate, rescheduleAppointment);
 router.post('/:id/cancel', authenticate, cancelAppointment);
 router.put('/:id', authenticate, updateAppointment);
+router.post('/:id/outcome', authenticate, recordSessionOutcome);
 router.post('/:id/review', authenticate, submitReview);
 
 export default router;

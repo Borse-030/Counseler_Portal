@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { isOnlineMeetingLink } from '../src/utils/sessionAttendance.js';
+import { hasFeedback, resolvedStatuses, sessionStatus } from '../src/utils/sessionOutcome.js';
 
 const load = (file, bindings, expression) => {
   const source = fs.readFileSync(new URL(`../../backend/controllers/${file}`, import.meta.url), 'utf8')
@@ -18,6 +19,8 @@ const setup = (role = 'counselor', status = 'upcoming', actorId = 'c') => {
   const actions = load('appointmentController.js', {
     User: { findOne: async () => actor }, Appointment: { findOne: async () => appointment },
     validOnlineMeetingLink: isOnlineMeetingLink,
+    resolvedStatuses, hasFeedback,
+    presentAppointment: apt => ({ ...apt, status: sessionStatus(apt) }),
   }, '({updateAppointment, rescheduleAppointment, cancelAppointment})');
   const invoke = async (action, body) => {
     const res = response();
@@ -52,8 +55,8 @@ test('dedicated reschedule and cancel endpoints also deny counselors', async () 
   }
 });
 
-test('assigned counselors can save notes on upcoming and completed sessions with history', async () => {
-  for (const status of ['upcoming', 'completed']) {
+test('assigned counselors can save notes on upcoming and all recorded outcomes with history', async () => {
+  for (const status of ['upcoming', ...resolvedStatuses]) {
     const h = setup('counselor', status);
     assert.equal((await h.invoke('updateAppointment', { sessionNotes: 'New notes' })).code, 200);
     assert.equal(h.saves(), 1);
@@ -61,6 +64,13 @@ test('assigned counselors can save notes on upcoming and completed sessions with
     assert.equal(h.appointment.sessionNoteHistory[0].notes, 'Original');
     assert.equal(h.appointment.status, status);
   }
+});
+
+test('unchanged notes do not write or append a history entry', async () => {
+  const h = setup();
+  assert.equal((await h.invoke('updateAppointment', { sessionNotes: 'Original' })).code, 200);
+  assert.equal(h.saves(), 0);
+  assert.equal(h.appointment.sessionNoteHistory.length, 0);
 });
 
 test('unassigned counselors and admins cannot edit clinical notes', async () => {
@@ -79,8 +89,8 @@ test('notes cannot be added to cancelled or unconfirmed sessions', async () => {
   }
 });
 
-test('admins retain completion, cancellation and meeting-link updates', async () => {
-  for (const status of ['completed', 'cancelled']) {
+test('admins retain cancellation and meeting-link updates (completion uses the outcome workflow)', async () => {
+  for (const status of ['cancelled']) {
     const h = setup('admin');
     assert.equal((await h.invoke('updateAppointment', { status })).code, 200);
     assert.equal(h.appointment.status, status);

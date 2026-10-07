@@ -19,7 +19,7 @@ const logAction = async (userId, action, req) => {
 };
 
 export const getCounselors = async (req, res) => {
-  const { specialty, maxPrice, minRating, search, language, gender, experience, onlineOffline } = req.query;
+  const { specialty, maxPrice, search, language, gender, experience, onlineOffline } = req.query;
 
   try {
     let query = { role: 'counselor', approved: true };
@@ -30,10 +30,6 @@ export const getCounselors = async (req, res) => {
 
     if (maxPrice) {
       query.price = { $lte: Number(maxPrice) };
-    }
-
-    if (minRating) {
-      query.rating = { $gte: Number(minRating) };
     }
 
     if (language) {
@@ -72,7 +68,13 @@ export const getCounselors = async (req, res) => {
       });
     }
 
-    res.json(counselors);
+    res.json(counselors.map(counselor => {
+      const data = counselor.toObject();
+      delete data.rating;
+      delete data.reviewCount;
+      delete data.reviews;
+      return data;
+    }));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -86,18 +88,11 @@ export const getCounselorById = async (req, res) => {
       return res.status(404).json({ message: 'Counselor not found' });
     }
 
-    const appointments = await Appointment.find({ counselorId: req.params.id, review: { $ne: null } });
-    const reviews = appointments.map(apt => ({
-      patientName: apt.patientName,
-      rating: apt.review.rating,
-      reviewText: apt.review.reviewText,
-      date: apt.review.date
-    }));
-
-    res.json({
-      ...counselor.toObject(),
-      reviews
-    });
+    const profile = counselor.toObject();
+    delete profile.rating;
+    delete profile.reviewCount;
+    delete profile.reviews;
+    res.json(profile);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
