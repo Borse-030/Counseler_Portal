@@ -15,13 +15,15 @@ export {
   Transaction,
   User
 } from './models/index.js';
+import dotenv from 'dotenv';
 
-// const MONGODB_URI = process.env.MONGODB_URI
-const MONGODB_URI = "mongodb+srv://survey_test_user:SurveyTest2026@cluster0.uq5nnqw.mongodb.net/CouncelorPortal?appName=Cluster0"
+dotenv.config();
+
+const MONGODB_URI = process.env.MONGODB_URI
 
 mongoose.connect(MONGODB_URI)
   .then(() => {
-    console.log('Connected to MongoDB', MONGODB_URI);
+    console.log('Connected to MongoDB');
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
