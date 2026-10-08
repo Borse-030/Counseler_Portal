@@ -23,11 +23,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Logger middleware
 app.use(async (req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log([]  );
   next();
 });
 
@@ -71,14 +72,14 @@ try {
 }
 
 const server = app.listen(PORT, () => {
-  console.log(`Counselling Program server is running on http://localhost:${PORT}`);
-  console.log(`Using MongoDB database connection.`);
+  console.log('Counselling Program server is running on http://localhost:' + PORT);
+  console.log('Using MongoDB database connection.');
 });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`Error: Port ${PORT} is already in use by another process.`);
-    console.error(`Please terminate the process using port ${PORT} or set a different PORT in .env.`);
+    console.error('Error: Port ' + PORT + ' is already in use by another process.');
+    console.error('Please terminate the process using port ' + PORT + ' or set a different PORT in .env.');
     process.exit(1);
   }
 });

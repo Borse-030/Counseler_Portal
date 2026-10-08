@@ -40,7 +40,7 @@ export const updateUserStatus = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (approved !== undefined && user.role === 'counselor') {
+    if (approved !== undefined) {
       user.approved = approved;
     }
 

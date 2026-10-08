@@ -13,10 +13,12 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
+import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
-// import SpaIcon from '@mui/icons-material/Spa';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { ToastContainer, toast } from 'react-toastify';
 
@@ -32,13 +34,13 @@ import AdminDashboard from './pages/AdminDashboard';
 import SessionRoom from './pages/SessionRoom';
 import LandingPage2 from './pages/LandingPage/LandingPage2';
 import Register from './pages/Register';
+import Profile from './pages/Profile';
 
 const validateMobile = (num) => {
   const digits = (num || '').replace(/\D/g, '');
   return digits.length === 10 && /^[6-9]\d{9}$/.test(digits);
 };
 
-// Custom wrapper to protect routes based on auth status and roles
 function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired }) {
   const navigate = useNavigate();
 
@@ -65,16 +67,14 @@ function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired })
   return children;
 }
 
-// Inner App with routing logic
 function AppContent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(api.getCurrentUser());
   const [notifications, setNotifications] = useState([]);
   const [notifAnchorEl, setNotifAnchorEl] = useState(null);
 
-  // Auth Dialog Mode: 'signin' | 'register'
+  // Unified Auth Modal State
   const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('signin'); // 'signin' or 'register'
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -90,7 +90,6 @@ function AppContent() {
   useEffect(() => {
     const handleInvalidToken = () => {
       setCurrentUser(null);
-      setAuthMode('signin');
       setAuthOpen(true);
       setAuthError('Your session has expired or is invalid. Please sign in again.');
     };
@@ -127,20 +126,8 @@ function AppContent() {
     }
   };
 
-  // Open Dialog for Sign In
-  const handleOpenSignIn = (presetMobile = '') => {
-    setAuthMode('signin');
-    setAuthError('');
-    setMobile(typeof presetMobile === 'string' ? presetMobile : '');
-    setOtp('');
-    setOtpSent(false);
-    setOtpSuccessMsg('');
-    setAuthOpen(true);
-  };
-
-  // Open Dialog for Register
-  const handleOpenRegister = (presetMobile = '') => {
-    setAuthMode('register');
+  // Open Unified Auth Modal for both Sign In and Register
+  const handleOpenAuth = (presetMobile = '') => {
     setAuthError('');
     setMobile(typeof presetMobile === 'string' ? presetMobile : '');
     setOtp('');
@@ -151,6 +138,19 @@ function AppContent() {
 
   const handleCloseAuth = () => {
     setAuthOpen(false);
+    setOtp('');
+    setOtpSent(false);
+    setAuthError('');
+  };
+
+  // Mobile input change: resets OTP state immediately
+  const handleMobileChange = (e) => {
+    const clean = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setMobile(clean);
+    setOtp('');
+    setOtpSent(false);
+    setAuthError('');
+    setOtpSuccessMsg('');
   };
 
   // Send OTP handler
@@ -170,13 +170,12 @@ function AppContent() {
       setAuthLoading(true);
       setAuthError('');
 
-      const isSignUp = authMode === 'register';
-      const res = await api.sendOtp(cleanMobile, isSignUp);
+      const res = await api.sendOtp(cleanMobile, false);
 
       setOtpSent(true);
-      setOtp('123456'); // Pre-fill default code for effortless testing
-      setOtpSuccessMsg(res.message || 'OTP sent successfully! Default verification code: 123456');
-      toast.info(`OTP sent to +91 ${cleanMobile}. Default code is 123456`);
+      setOtp(''); // Field is completely empty by default
+      setOtpSuccessMsg(`OTP sent to +91 ${cleanMobile}. Please enter the 6-digit code.`);
+      toast.info(`OTP sent to +91 ${cleanMobile}`);
     } catch (err) {
       setAuthError(err.message || 'Failed to send OTP.');
       toast.error(err.message || 'Failed to send OTP.');
@@ -198,22 +197,23 @@ function AppContent() {
       setAuthLoading(true);
       setAuthError('');
 
-      if (authMode === 'register') {
-        // Registration verification flow
-        const res = await api.verifyRegistrationOtp(cleanMobile, otp.trim());
+      // Verify OTP with backend
+      const res = await api.verifyOtp(cleanMobile, otp.trim());
 
-        if (res.exists || res.registered) {
-          // User already in database -> switch to Sign In
-          toast.info('This mobile number is already registered! Redirecting to Sign In...');
-          setAuthMode('signin');
-          setOtpSent(false);
-          setOtp('');
-          setAuthError('Account already exists with this number. Please sign in with OTP.');
-          return;
+      if (res.user || (res.exists && res.user)) {
+        // User already in database -> logged in successfully
+        setCurrentUser(res.user);
+        setAuthOpen(false);
+        toast.success(`Welcome back, ${res.user.name || 'User'}!`);
+
+        if (res.user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
         }
-
-        // User is new -> Navigate to register page with pre-verified state
-        toast.success('Mobile number verified! Proceeding to registration intake...');
+      } else {
+        // User does not exist -> Navigate to registration page with verified mobile
+        toast.success('Mobile verified! Please complete your registration.');
         setAuthOpen(false);
         navigate('/register', {
           state: {
@@ -221,21 +221,9 @@ function AppContent() {
             otpVerified: true
           }
         });
-      } else {
-        // Sign In verification flow
-        const data = await api.verifyOtp(cleanMobile, otp.trim());
-        setCurrentUser(data.user);
-        setAuthOpen(false);
-        toast.success(`Welcome back, ${data.user.name || 'User'}!`);
-
-        if (data.user.role === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate('/dashboard');
-        }
       }
     } catch (err) {
-      setAuthError(err.message || 'OTP verification failed.');
+      setAuthError(err.message || 'OTP verification failed. Please try again.');
       toast.error(err.message || 'OTP verification failed.');
     } finally {
       setAuthLoading(false);
@@ -258,7 +246,6 @@ function AppContent() {
     setAnchorEl(null);
   };
 
-  // Dynamic header rendering
   const renderDashboardLink = () => {
     if (!currentUser) return null;
     const path = currentUser.role === 'admin' ? '/admin' : '/dashboard';
@@ -281,9 +268,11 @@ function AppContent() {
     );
   };
 
+  const isApproved = currentUser?.approved === true;
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {/* Top Navbar matching attached screenshot */}
+      {/* Top Navbar */}
       <AppBar
         position="sticky"
         elevation={0}
@@ -295,7 +284,6 @@ function AppContent() {
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', gap: 1, px: { xs: 2, sm: 4, md: 6 }, minHeight: '70px' }}>
-
           {/* Logo Brand */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'inherit' }} component={Link} to="/">
             <SpaIcon color="primary" sx={{ fontSize: 32 }} />
@@ -304,30 +292,9 @@ function AppContent() {
             </Typography>
           </Box>
 
-
-
           {/* Right Navigation Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
             {renderDashboardLink()}
-
-            {/* Status Pill matching screenshot */}
-            {/* <Box
-              sx={{
-                display: { xs: 'none', sm: 'flex' },
-                alignItems: 'center',
-                gap: 0.75,
-                px: 1.75,
-                py: 0.6,
-                borderRadius: '99px',
-                bgcolor: '#dcfce7',
-                color: '#15803d',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-              }}
-            >
-              <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#16a34a' }} />
-              Available Today
-            </Box> */}
 
             {currentUser && (
               <Box>
@@ -385,7 +352,7 @@ function AppContent() {
               </Box>
             )}
 
-            {/* Auth options */}
+            {/* User Dropdown / Sign In Options */}
             {currentUser ? (
               <Box>
                 <IconButton
@@ -398,8 +365,12 @@ function AppContent() {
                     '&:hover': { transform: 'scale(1.05)' }
                   }}
                 >
-                  <Avatar src={currentUser.avatar} sx={{ width: 36, height: 36 }} />
+                  <Avatar src={currentUser.avatar} alt={currentUser.name} sx={{ width: 36, height: 36 }}>
+                    {currentUser.name ? currentUser.name[0].toUpperCase() : 'U'}
+                  </Avatar>
                 </IconButton>
+
+                {/* IMPROVED USER POPOVER */}
                 <Menu
                   anchorEl={anchorEl}
                   open={Boolean(anchorEl)}
@@ -409,95 +380,138 @@ function AppContent() {
                   PaperProps={{
                     elevation: 6,
                     sx: {
-                      minWidth: 260,
-                      borderRadius: 3,
-                      p: 1,
-                      mt: 1,
-                      overflow: 'visible',
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                      width: 290,
+                      borderRadius: 3.5,
+                      p: 1.25,
+                      mt: 1.5,
+                      boxShadow: '0 12px 35px rgba(15, 23, 42, 0.12)',
                       border: '1px solid #e2e8f0',
                     }
                   }}
                 >
+                  {/* User Profile Header Card inside Popover */}
                   <Box sx={{
-                    p: 1.75,
-                    mb: 1,
+                    p: 2,
+                    mb: 1.25,
                     borderRadius: 2.5,
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.06) 100%)',
-                    border: '1px solid rgba(99,102,241,0.15)',
+                    background: 'linear-gradient(135deg, rgba(243, 232, 255, 0.6) 0%, rgba(241, 245, 249, 0.8) 100%)',
+                    border: '1px solid #e9d5ff',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: 0.5
+                    gap: 1.25
                   }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <Avatar
                         src={currentUser.avatar}
+                        alt={currentUser.name}
                         sx={{
-                          width: 44,
-                          height: 44,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                          border: '2px solid #ffffff'
+                          width: 46,
+                          height: 46,
+                          boxShadow: '0 2px 8px rgba(124, 58, 237, 0.2)',
+                          border: '2px solid #ffffff',
+                          bgcolor: '#ede9fe',
+                          color: '#6b21a8',
+                          fontWeight: 700
                         }}
-                      />
+                      >
+                        {currentUser.name ? currentUser.name[0].toUpperCase() : 'U'}
+                      </Avatar>
                       <Box sx={{ overflow: 'hidden', flex: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: 'Outfit', lineHeight: 1.2, noWrap: true }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: 'Outfit', lineHeight: 1.2, noWrap: true, color: '#1e1b4b' }}>
                           {currentUser.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          {currentUser.email}
+                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          +91 {currentUser.mobile || currentUser.email}
                         </Typography>
                       </Box>
                     </Box>
 
-                    <Chip
-                      size="small"
-                      icon={
-                        currentUser.role === 'counselor'
-                          ? <PsychologyIcon sx={{ fontSize: '15px !important' }} />
-                          : currentUser.role === 'admin'
-                            ? <AdminPanelSettingsIcon sx={{ fontSize: '15px !important' }} />
-                            : <PersonIcon sx={{ fontSize: '15px !important' }} />
-                      }
-                      label={`Role: ${currentUser.role || 'user'}`}
-                      sx={{
-                        mt: 0.75,
-                        fontWeight: 700,
-                        fontSize: '0.72rem',
-                        textTransform: 'capitalize',
-                        bgcolor: 'rgba(99,102,241,0.14)',
-                        color: '#4f46e5',
-                      }}
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                      <Chip
+                        size="small"
+                        icon={
+                          currentUser.role === 'counselor'
+                            ? <PsychologyIcon sx={{ fontSize: '14px !important' }} />
+                            : currentUser.role === 'admin'
+                              ? <AdminPanelSettingsIcon sx={{ fontSize: '14px !important' }} />
+                              : <PersonIcon sx={{ fontSize: '14px !important' }} />
+                        }
+                        label={currentUser.role ? currentUser.role.toUpperCase() : 'PATIENT'}
+                        sx={{
+                          fontWeight: 800,
+                          fontSize: '0.68rem',
+                          bgcolor: '#ede9fe',
+                          color: '#6b21a8',
+                          height: 22
+                        }}
+                      />
+
+                      <Chip
+                        size="small"
+                        icon={isApproved ? <CheckCircleIcon sx={{ fontSize: '13px !important', color: '#16a34a !important' }} /> : <HourglassEmptyIcon sx={{ fontSize: '13px !important', color: '#d97706 !important' }} />}
+                        label={isApproved ? 'Verified' : 'Under Review'}
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: '0.68rem',
+                          bgcolor: isApproved ? '#dcfce7' : '#fef3c7',
+                          color: isApproved ? '#15803d' : '#b45309',
+                          height: 22,
+                          border: '1px solid',
+                          borderColor: isApproved ? '#bbf7d0' : '#fde68a'
+                        }}
+                      />
+                    </Box>
                   </Box>
 
                   <MenuItem
                     component={Link}
                     to={currentUser.role === 'admin' ? '/admin' : '/dashboard'}
                     onClick={handleMenuClose}
-                    sx={{ borderRadius: 1.5, py: 1, px: 1.5, fontWeight: 600, gap: 1.25, fontSize: '0.9rem' }}
+                    sx={{ borderRadius: 2, py: 1.1, px: 1.75, fontWeight: 700, gap: 1.5, fontSize: '0.88rem', color: '#1e1b4b' }}
                   >
-                    <DashboardIcon fontSize="small" sx={{ color: 'primary.main' }} />
-                    Dashboard View
+                    <DashboardIcon fontSize="small" sx={{ color: '#7c3aed' }} />
+                    Dashboard
                   </MenuItem>
 
-                  <Divider sx={{ my: 0.5 }} />
+                  <MenuItem
+                    component={Link}
+                    to="/profile"
+                    onClick={handleMenuClose}
+                    sx={{ borderRadius: 2, py: 1.1, px: 1.75, fontWeight: 700, gap: 1.5, fontSize: '0.88rem', color: '#1e1b4b' }}
+                  >
+                    <PersonOutlinedIcon fontSize="small" sx={{ color: '#0d9488' }} />
+                    My Profile View
+                  </MenuItem>
+
+                  {currentUser.role === 'admin' && (
+                    <MenuItem
+                      component={Link}
+                      to="/admin"
+                      onClick={handleMenuClose}
+                      sx={{ borderRadius: 2, py: 1.1, px: 1.75, fontWeight: 700, gap: 1.5, fontSize: '0.88rem', color: '#1e1b4b' }}
+                    >
+                      <AdminPanelSettingsIcon fontSize="small" sx={{ color: '#3b82f6' }} />
+                      Admin Console
+                    </MenuItem>
+                  )}
+
+                  <Divider sx={{ my: 0.75 }} />
 
                   <MenuItem
                     onClick={handleLogout}
-                    sx={{ borderRadius: 1.5, py: 1, px: 1.5, fontWeight: 600, gap: 1.25, fontSize: '0.9rem', color: 'error.main' }}
+                    sx={{ borderRadius: 2, py: 1.1, px: 1.75, fontWeight: 700, gap: 1.5, fontSize: '0.88rem', color: '#ef4444' }}
                   >
-                    <LogoutIcon fontSize="small" sx={{ color: 'error.main' }} />
+                    <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
                     Log Out
                   </MenuItem>
                 </Menu>
               </Box>
             ) : (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                {/* Sign In text link */}
+                {/* Unified Auth Button */}
                 <Button
                   variant="text"
-                  onClick={() => handleOpenSignIn('')}
+                  onClick={() => handleOpenAuth('')}
                   sx={{
                     fontWeight: 700,
                     color: '#475569',
@@ -509,9 +523,8 @@ function AppContent() {
                   Sign In
                 </Button>
 
-                {/* Book a Counselling Session button */}
                 <Button
-                  onClick={() => handleOpenRegister('')}
+                  onClick={() => handleOpenAuth('')}
                   variant="contained"
                   startIcon={<ShieldOutlinedIcon sx={{ fontSize: '17px !important' }} />}
                   sx={{
@@ -532,11 +545,6 @@ function AppContent() {
                 >
                   Register
                 </Button>
-
-                <Avatar
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-                  sx={{ width: 34, height: 34, display: { xs: 'none', sm: 'inline-block' } }}
-                />
               </Box>
             )}
           </Box>
@@ -546,52 +554,22 @@ function AppContent() {
       {/* Main View Display Container */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         <Routes>
+          <Route path="/" element={<LandingPage onAuthRedirect={() => handleOpenAuth('')} onOpenRegisterAuth={() => handleOpenAuth('')} />} />
+          <Route path="/lp2" element={<LandingPage2 />} />
+          <Route path="/session-request" element={<SessionRequest onAuthRedirect={() => handleOpenAuth('')} currentUser={currentUser} />} />
+          <Route path="/register" element={<Register onAuthSuccess={setCurrentUser} onOpenAuth={() => handleOpenAuth('')} currentUser={currentUser} />} />
           <Route
-            path="/"
+            path="/profile"
             element={
-              <LandingPage
-                // onAuthRedirect={handleOpenSignIn}
-                // onOpenRegisterAuth={handleOpenRegister}
-                // currentUser={currentUser}
-              />
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={() => handleOpenAuth('')}>
+                <Profile currentUser={currentUser} onUserUpdated={setCurrentUser} />
+              </ProtectedRoute>
             }
           />
-          <Route
-            path="/lp2"
-            element={
-              <LandingPage2
-                // onAuthRedirect={handleOpenSignIn}
-                // onOpenRegisterAuth={handleOpenRegister}
-                // currentUser={currentUser}
-              />
-            }
-          />
-
-          <Route
-            path="/session-request"
-            element={
-              <SessionRequest
-                onAuthRedirect={handleOpenSignIn}
-                currentUser={currentUser}
-              />
-            }
-          />
-
-          <Route
-            path="/register"
-            element={
-              <Register
-                onAuthSuccess={setCurrentUser}
-                onOpenAuth={handleOpenSignIn}
-                currentUser={currentUser}
-              />
-            }
-          />
-
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenSignIn} allowedRoles={['patient', 'user', 'counselor']}>
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={() => handleOpenAuth('')} allowedRoles={['patient', 'user', 'counselor']}>
                 {currentUser?.role === 'counselor' ? (
                   <CounselorDashboard currentUser={currentUser} />
                 ) : (
@@ -600,109 +578,109 @@ function AppContent() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/admin"
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenSignIn} allowedRoles={['admin']}>
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={() => handleOpenAuth('')} allowedRoles={['admin']}>
                 <AdminDashboard currentUser={currentUser} />
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/session/:id"
             element={
-              <ProtectedRoute currentUser={currentUser} onAuthRequired={handleOpenSignIn}>
+              <ProtectedRoute currentUser={currentUser} onAuthRequired={() => handleOpenAuth('')}>
                 <SessionRoom currentUser={currentUser} />
               </ProtectedRoute>
             }
           />
-
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>
 
-      {/* Dynamic Unified Verification Dialog (Sign In or Register) */}
+      {/* UNIFIED VERIFICATION MODAL FOR SIGN IN & REGISTER */}
       <Dialog open={authOpen} onClose={handleCloseAuth} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ textAlign: 'center', pt: 3, pb: 1 }}>
+        <DialogTitle sx={{ textAlign: 'center', pt: 3.5, pb: 1 }}>
           <Box
             sx={{
               display: 'inline-flex',
-              p: 1.25,
+              p: 1.5,
               borderRadius: '50%',
               bgcolor: '#f3e8ff',
               color: '#7c3aed',
               mb: 1
             }}
           >
-            {authMode === 'register' ? <HowToRegOutlinedIcon /> : <LockOutlinedIcon />}
+            <LockOutlinedIcon fontSize="medium" />
           </Box>
           <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, color: '#1e1b4b' }}>
-            {authMode === 'register' ? 'Register for Counselling Program' : 'Sign In to Counselling Program'}
+            Sign In or Register
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {authMode === 'register'
-              ? 'Enter your mobile number and verify OTP to start registration.'
-              : 'Enter your registered mobile number to sign in securely.'}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Enter your mobile number. We will verify your number with OTP and guide you to Sign In or Registration.
           </Typography>
         </DialogTitle>
-        <DialogContent sx={{ mt: 1 }}>
+        <DialogContent sx={{ mt: 1, pb: 3.5 }}>
           {authError && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{authError}</Alert>}
           {otpSuccessMsg && <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>{otpSuccessMsg}</Alert>}
 
-          <Box>
-            <form onSubmit={otpSent ? handleAuthSubmit : handleSendOtp}>
+          <Box component="form" onSubmit={otpSent ? handleAuthSubmit : handleSendOtp}>
+            <TextField
+              label="10-Digit Mobile Number"
+              fullWidth
+              margin="normal"
+              disabled={otpSent}
+              value={mobile}
+              onChange={handleMobileChange}
+              inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+              InputProps={{
+                startAdornment: (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pr: 1, borderRight: '1px solid #cbd5e1', mr: 1 }}>
+                    <PhoneIphoneIcon sx={{ color: '#64748b', fontSize: 18 }} />
+                    <Typography sx={{ fontWeight: 700, fontSize: '0.88rem', color: '#475569' }}>+91</Typography>
+                  </Box>
+                )
+              }}
+              autoFocus
+            />
+
+            {otpSent && (
               <TextField
-                label="Mobile Number"
-                placeholder="e.g. 9876543210"
+                label="6-Digit OTP Verification Code"
                 fullWidth
                 margin="normal"
-                disabled={otpSent}
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+                required
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputProps={{ maxLength: 6, inputMode: 'numeric' }}
+                helperText="Enter the 6-digit code received"
                 autoFocus
               />
+            )}
 
-              {otpSent && (
-                <TextField
-                  label="OTP Verification Code"
-                  placeholder="Enter 6-digit code"
-                  fullWidth
-                  margin="normal"
-                  required
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  inputProps={{ maxLength: 6, inputMode: 'numeric' }}
-                  helperText="Default testing code: 123456"
-                  autoFocus
-                />
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              sx={{
+                mt: 3,
+                py: 1.3,
+                borderRadius: '12px',
+                fontWeight: 700,
+                fontSize: '0.92rem',
+                bgcolor: '#4c3b71',
+                textTransform: 'none',
+                boxShadow: '0 4px 14px rgba(76, 59, 113, 0.25)',
+                '&:hover': { bgcolor: '#3b2064' }
+              }}
+              disabled={authLoading}
+            >
+              {authLoading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                otpSent ? 'Verify & Continue' : 'Send OTP Code'
               )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                fullWidth
-                sx={{
-                  mt: 3,
-                  py: 1.25,
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  bgcolor: '#4c3b71',
-                  '&:hover': { bgcolor: '#3b2064' }
-                }}
-                disabled={authLoading}
-              >
-                {authLoading ? (
-                  <CircularProgress size={24} color="inherit" />
-                ) : (
-                  otpSent
-                    ? (authMode === 'register' ? 'Verify & Continue to Intake' : 'Verify & Sign In')
-                    : 'Send OTP Code'
-                )}
-              </Button>
-            </form>
+            </Button>
 
             {otpSent && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
@@ -714,7 +692,7 @@ function AppContent() {
                     setOtpSuccessMsg('');
                     setAuthError('');
                   }}
-                  sx={{ textTransform: 'none', color: '#64748b' }}
+                  sx={{ textTransform: 'none', color: '#64748b', fontWeight: 600 }}
                 >
                   Change Number
                 </Button>
@@ -728,59 +706,10 @@ function AppContent() {
                 </Button>
               </Box>
             )}
-
-            <Divider sx={{ my: 3 }} />
-
-            {/* Toggle between Register & Sign In inside modal */}
-            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: '#f8fafc', borderRadius: 2.5, border: '1px solid #e2e8f0' }}>
-              {authMode === 'register' ? (
-                <>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Already have an account?
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => {
-                      setAuthMode('signin');
-                      setOtpSent(false);
-                      setOtp('');
-                      setAuthError('');
-                      setOtpSuccessMsg('');
-                    }}
-                    sx={{ fontWeight: 700, borderRadius: '10px', textTransform: 'none', borderColor: '#4c3b71', color: '#4c3b71' }}
-                  >
-                    Switch to Sign In
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Don&apos;t have an account yet?
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => {
-                      setAuthMode('register');
-                      setOtpSent(false);
-                      setOtp('');
-                      setAuthError('');
-                      setOtpSuccessMsg('');
-                    }}
-                    endIcon={<ArrowForwardIcon />}
-                    sx={{ fontWeight: 700, borderRadius: '10px', textTransform: 'none', borderColor: '#4c3b71', color: '#4c3b71' }}
-                  >
-                    Begin Intake Registration
-                  </Button>
-                </>
-              )}
-            </Box>
           </Box>
         </DialogContent>
       </Dialog>
 
-      {/* Global Toast Container for all feedback */}
       <ToastContainer
         position="top-right"
         autoClose={4000}
@@ -799,8 +728,6 @@ function AppContent() {
 
 export default function App() {
   const [themeMode] = useState(() => localStorage.getItem('theme') || 'light');
-
-
   const theme = getTheme(themeMode);
 
   return (

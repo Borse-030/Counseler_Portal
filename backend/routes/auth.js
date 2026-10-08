@@ -6,7 +6,9 @@ import {
   verifyMobileOtp,
   verifyRegistrationOtp,
   refreshToken,
-  forgotPassword
+  forgotPassword,
+  getProfile,
+  updateProfile
 } from '../controllers/authController.js';
 
 const router = express.Router();
@@ -18,5 +20,7 @@ router.post('/mobile-otp-verify', verifyMobileOtp);
 router.post('/verify-registration-otp', verifyRegistrationOtp);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', forgotPassword);
+router.get('/profile', getProfile);
+router.put('/profile', updateProfile);
 
 export default router;

@@ -1,4 +1,4 @@
-import { createCareRequest } from '../utils/careRequestService.js';
+﻿import { createCareRequest } from '../utils/careRequestService.js';
 import { User, Availability, AppointmentType, AuditLog, OtpVerification } from '../models/index.js';
 import {
   compareOtp,
@@ -7,7 +7,8 @@ import {
   isValidMobile,
   issueAuthTokens,
   normalizeMobile,
-  verifyJwt
+  verifyJwt,
+  getUserIdFromToken
 } from '../utils/security.js';
 import { sendEmail, sendOtpSms } from '../utils/notificationService.js';
 
@@ -55,12 +56,13 @@ const formatUser = (user) => ({
   experience: user.experience,
   registrationNumber: user.registrationNumber,
   certificates: user.certificates,
-  languages: user.languages
+  languages: user.languages,
+  createdAt: user.createdAt
 });
 
 const createOtpChallenge = async (mobile, purpose) => {
   const normalizedMobile = normalizeMobile(mobile);
-  const plainOtp = '123456'; // Testing OTP hardcoded
+  const plainOtp = '123456';
   const hashedOtp = await hashOtp(plainOtp);
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
 
@@ -138,6 +140,75 @@ const logAction = async (userId, action, req) => {
   }
 };
 
+export const getProfile = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+    const token = authHeader.split(' ')[1];
+    const userId = getUserIdFromToken(token);
+    const user = await User.findOne({ id: userId });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(formatUser(user));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+    const token = authHeader.split(' ')[1];
+    const userId = getUserIdFromToken(token);
+    const user = await User.findOne({ id: userId });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const {
+      name, email, avatar, gender, dob, state, district, city, address,
+      preferredLanguage, preferredCounselingMode, counselingRequirements,
+      specialty, bio, credentials, experience, registrationNumber, certificates, languages
+    } = req.body;
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (avatar !== undefined) user.avatar = avatar;
+    if (gender) user.gender = gender;
+    if (dob) user.dob = dob;
+    if (state) user.state = state;
+    if (district) user.district = district;
+    if (city !== undefined) user.city = city || district;
+    if (address !== undefined) user.address = address;
+    if (preferredLanguage) user.preferredLanguage = preferredLanguage;
+    if (preferredCounselingMode) user.preferredCounselingMode = preferredCounselingMode;
+    if (counselingRequirements !== undefined) user.counselingRequirements = counselingRequirements;
+    if (specialty) user.specialty = specialty;
+    if (bio !== undefined) user.bio = bio;
+    if (credentials) user.credentials = credentials;
+    if (experience !== undefined) user.experience = experience;
+    if (registrationNumber !== undefined) user.registrationNumber = registrationNumber;
+    if (certificates !== undefined) user.certificates = certificates;
+    if (languages) user.languages = languages;
+
+    await user.save();
+    await logAction(user.id, 'User updated profile details', req);
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: formatUser(user)
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 export const login = async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -149,9 +220,6 @@ export const login = async (req, res) => {
 
     if (user.suspended) {
       return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
-    }
-    if (['user', 'patient'].includes(user.role) && user.approved === false) {
-      return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
     }
 
     await logAction(user.id, 'User login via Email + Password', req);
@@ -180,17 +248,24 @@ export const verifyRegistrationOtp = async (req, res) => {
     return res.status(400).json({ message: 'OTP is required' });
   }
 
-  if (String(otp).trim() !== '123456') {
-    return res.status(400).json({ message: 'Invalid OTP code. Please enter 123456' });
+  const otpResult = await verifyOtpChallenge(mobile, otp, 'signup');
+  if (!otpResult.ok) {
+    return res.status(otpResult.status).json({ message: otpResult.message });
   }
 
   try {
     const user = await findUserByMobile(mobile);
     if (user) {
+      if (user.suspended) {
+        return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
+      }
+      const tokens = issueAuthTokens(user.id);
       return res.json({
+        ...tokens,
         exists: true,
         registered: true,
-        message: 'This mobile number is already registered. Please sign in.'
+        user: formatUser(user),
+        message: 'This mobile number is already registered. Logging you in...'
       });
     }
 
@@ -208,7 +283,7 @@ export const verifyRegistrationOtp = async (req, res) => {
 
 export const register = async (req, res) => {
   const {
-    otp, name, role, email,
+    otp, name, role, email, avatar,
     mobile, gender, dob, state, district, city, address, preferredLanguage, preferredCounselingMode, counselingRequirements,
     specialty, bio, credentials, experience, registrationNumber, certificates, languages,
     caseId, consents
@@ -235,10 +310,12 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: 'Mobile number already registered. Please sign in instead.' });
     }
 
-    const finalRole = role || 'user';
+    const finalRole = role || 'patient';
     const constructedEmail = (email && email.trim()) ? email.trim() : `${mobile.replace(/\D/g, '') || Date.now()}@counsellingprogram.com`;
 
     const userId = `${finalRole}_${Date.now()}`;
+    const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name || 'User')}`;
+
     const newUser = new User({
       id: userId,
       email: constructedEmail,
@@ -246,7 +323,7 @@ export const register = async (req, res) => {
       name,
       role: finalRole,
       mobile: normalizeMobile(mobile),
-      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name || 'User')}`,
+      avatar: avatar || defaultAvatar,
       gender: gender || 'unspecified',
       dob: dob || '',
       state: state || '',
@@ -259,6 +336,7 @@ export const register = async (req, res) => {
       caseId: caseId || '',
       consents: consents || {},
       consentAgreedAt: consents ? new Date() : undefined,
+      approved: false, // Under review until verified by Admin
       createdAt: new Date()
     });
 
@@ -291,7 +369,6 @@ export const register = async (req, res) => {
       ]);
 
     } else if (['user', 'patient'].includes(finalRole)) {
-      // Patient accounts remain unusable until a staff member approves their intake.
       newUser.approved = false;
     }
 
@@ -304,14 +381,15 @@ export const register = async (req, res) => {
           intakeNotes: newUser.counselingRequirements || '',
         });
       } catch (error) {
-        // Do not leave a registered patient without an approval request.
         await User.deleteOne({ id: userId });
         throw error;
       }
     }
-    await logAction(userId, `User registered via OTP as ${role}`, req);
+    await logAction(userId, `User registered via OTP as ${finalRole}`, req);
 
+    const tokens = issueAuthTokens(newUser.id);
     res.status(201).json({
+      ...tokens,
       user: formatUser(newUser),
       request: careRequest
     });
@@ -332,29 +410,17 @@ export const sendMobileOtp = async (req, res) => {
 
   try {
     const user = await findUserByMobile(mobile);
-    const purpose = isSignUp ? 'signup' : 'login';
+    const purpose = user ? 'login' : 'signup';
 
-    if (isSignUp) {
-      if (user) {
-        return res.status(400).json({ message: 'Mobile number already registered. Please sign in instead.' });
-      }
-    } else {
-      if (!user) {
-        return res.status(404).json({ message: 'No registered user found with this mobile number. Please register first.' });
-      }
-      if (user.suspended) {
-        return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
-      }
-      if (['user', 'patient'].includes(user.role) && user.approved === false) {
-        return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
-      }
+    if (user && user.suspended) {
+      return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
     }
 
     const expiresAt = await createOtpChallenge(mobile, purpose);
     res.json({
-      message: `OTP sent successfully. Code is 123456 (expires in ${OTP_TTL_MINUTES} minutes).`,
+      message: `OTP sent successfully to +91 ${normalizeMobile(mobile)}.`,
       expiresAt,
-      otp: '123456'
+      exists: Boolean(user)
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -373,22 +439,26 @@ export const verifyMobileOtp = async (req, res) => {
 
   try {
     const user = await findUserByMobile(mobile);
+    const purpose = user ? 'login' : 'signup';
+
+    const otpResult = await verifyOtpChallenge(mobile, otp, purpose);
+    if (!otpResult.ok) {
+      return res.status(otpResult.status).json({ message: otpResult.message });
+    }
+
     if (!user) {
-      return res.status(404).json({ message: 'No registered user found with this mobile number. Please register first.' });
+      // Unregistered mobile number verified
+      return res.json({
+        exists: false,
+        registered: false,
+        verified: true,
+        mobile: normalizeMobile(mobile),
+        message: 'Mobile number verified. Proceeding to registration...'
+      });
     }
 
     if (user.suspended) {
       return res.status(403).json({ message: 'Your account has been suspended by the administrator.' });
-    }
-    if (['user', 'patient'].includes(user.role) && user.approved === false) {
-      return res.status(403).json({ message: 'Your registration is awaiting review. You can sign in after it is approved.' });
-    }
-
-    if (String(otp).trim() !== '123456') {
-      const otpResult = await verifyOtpChallenge(mobile, otp, 'login');
-      if (!otpResult.ok) {
-        return res.status(otpResult.status).json({ message: otpResult.message });
-      }
     }
 
     await logAction(user.id, 'User login via Mobile + OTP', req);
@@ -396,7 +466,10 @@ export const verifyMobileOtp = async (req, res) => {
     const tokens = issueAuthTokens(user.id);
     res.json({
       ...tokens,
-      user: formatUser(user)
+      exists: true,
+      registered: true,
+      user: formatUser(user),
+      message: `Welcome back, ${user.name || 'User'}!`
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -412,7 +485,7 @@ export const refreshToken = async (req, res) => {
   try {
     const payload = verifyJwt(refreshToken, 'refresh');
     const user = await User.findOne({ id: payload.sub });
-    if (!user || user.suspended || (['user', 'patient'].includes(user.role) && user.approved === false)) {
+    if (!user || user.suspended) {
       return res.status(401).json({ message: 'Invalid refresh token' });
     }
 

@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+﻿const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 let authToken = localStorage.getItem('token') || null;
 let refreshToken = localStorage.getItem('refreshToken') || null;
@@ -109,6 +109,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+    if (data.token) {
+      api.setToken(data.token);
+      api.setRefreshToken(data.refreshToken);
+      api.setCurrentUser(data.user);
+    }
     return data;
   },
 
@@ -130,17 +135,44 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ mobile, otp }),
     });
-    api.setToken(data.token);
-    api.setRefreshToken(data.refreshToken);
-    api.setCurrentUser(data.user);
+    if (data.token) {
+      api.setToken(data.token);
+      api.setRefreshToken(data.refreshToken);
+      api.setCurrentUser(data.user);
+    }
     return data;
   },
 
   verifyRegistrationOtp: async (mobile, otp) => {
-    return request('/auth/verify-registration-otp', {
+    const data = await request('/auth/verify-registration-otp', {
       method: 'POST',
       body: JSON.stringify({ mobile, otp }),
     });
+    if (data.token) {
+      api.setToken(data.token);
+      api.setRefreshToken(data.refreshToken);
+      api.setCurrentUser(data.user);
+    }
+    return data;
+  },
+
+  getProfile: async () => {
+    const user = await request('/auth/profile');
+    if (user) {
+      api.setCurrentUser(user);
+    }
+    return user;
+  },
+
+  updateProfile: async (profileData) => {
+    const data = await request('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+    if (data.user) {
+      api.setCurrentUser(data.user);
+    }
+    return data;
   },
 
   refreshSession: async () => {

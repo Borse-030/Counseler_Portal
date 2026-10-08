@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Box, Container, Card, Typography, TextField, Button,
   Grid, MenuItem, FormControl, Select, FormHelperText,
-  Checkbox, FormControlLabel, Alert, CircularProgress, Chip,
-  Divider, InputAdornment, Paper, Tooltip
+  Checkbox, ListItemText, OutlinedInput, FormControlLabel, Alert, CircularProgress, Chip,
+  Divider, InputAdornment, Paper, Tooltip, Avatar, IconButton
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
@@ -18,21 +18,20 @@ import LocationCityOutlinedIcon from '@mui/icons-material/LocationCityOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import TranslateOutlinedIcon from '@mui/icons-material/TranslateOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
-import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import LockIcon from '@mui/icons-material/Lock';
 import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutlined';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
-import LockIcon from '@mui/icons-material/Lock';
 import SpaIcon from '@mui/icons-material/Spa';
 import GroupsIcon from '@mui/icons-material/Groups';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import { toast } from 'react-toastify';
 import { api } from '../api';
 import { INDIAN_STATES, INDIAN_STATES_AND_DISTRICTS } from '../data/indianLocations';
 
-const LANGUAGES = [
-  'English', 'Hindi', 'Marathi',
-  // 'Gujarati', 'Bengali', 'Tamil', 'Telugu', 'Kannada', 'Other'
+const ALL_LANGUAGES = [
+  'English', 'Hindi', 'Marathi'
 ];
 
 const GENDER_OPTIONS = [
@@ -76,7 +75,6 @@ const generateCaseId = () => {
   return `#${letters}-${num}`;
 };
 
-// Calculate Max Date based on required min age
 const getMaxDobForGender = (gender) => {
   const today = new Date();
   const minAge = gender === 'Male' ? 21 : 18;
@@ -99,7 +97,6 @@ const calculateAge = (dobString) => {
   return age;
 };
 
-// Reusable styled input styling matching the screenshot
 const formFieldSx = {
   '& .MuiOutlinedInput-root': {
     bgcolor: '#f8fafc',
@@ -125,12 +122,6 @@ const formFieldSx = {
         borderColor: '#e2e8f0',
       },
     },
-    '& input::placeholder': {
-      fontSize: '0.88rem',
-      fontWeight: 400,
-      color: '#94a3b8',
-      opacity: 1,
-    },
   },
   '& .MuiInputLabel-root': {
     fontSize: '0.9rem',
@@ -150,26 +141,20 @@ const formFieldSx = {
     color: '#64748b',
   },
 };
-
 export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   const navigate = useNavigate();
   const location = useLocation();
 
   const preVerifiedMobile = location.state?.verifiedMobile || '';
 
-  // If already logged in, redirect
   useEffect(() => {
     if (currentUser) {
       navigate('/dashboard', { replace: true });
     }
   }, [currentUser, navigate]);
 
-  // Step 0: Mobile & OTP Verification
-  // Step 1: Personal, Demographic & Location Details
-  // Step 2: Informed Consent & Verification
   const [activeStep, setActiveStep] = useState(() => (preVerifiedMobile ? 1 : 0));
 
-  // Step 0 State
   const [verifyMobile, setVerifyMobile] = useState(() => preVerifiedMobile || '');
   const [verifyOtp, setVerifyOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -177,22 +162,22 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpCountdown, setOtpCountdown] = useState(0);
 
-  // Form State
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [selectedLanguages, setSelectedLanguages] = useState(['English', 'Hindi']);
+
   const [formData, setFormData] = useState({
     name: '',
     mobile: preVerifiedMobile,
     email: '',
-    gender: '', // User must select gender first
+    gender: '',
     dob: '',
     state: 'Maharashtra',
     district: 'Mumbai',
     address: '',
-    preferredLanguage: 'English & Hindi',
     preferredCounselingMode: 'Online',
     counselingRequirements: '',
   });
 
-  // If navigation state updates with verifiedMobile, sync it
   useEffect(() => {
     if (location.state?.verifiedMobile) {
       setFormData(prev => ({ ...prev, mobile: location.state.verifiedMobile }));
@@ -213,9 +198,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   const [errors, setErrors] = useState({});
   const [consentErrors, setConsentErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
 
-  // Countdown timer
   useEffect(() => {
     let timer;
     if (otpCountdown > 0) {
@@ -224,19 +207,58 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
     return () => clearTimeout(timer);
   }, [otpCountdown]);
 
-  // Dynamic available districts based on selected state
   const availableDistricts = useMemo(() => {
     if (!formData.state) return [];
     return INDIAN_STATES_AND_DISTRICTS[formData.state] || ['Main District', 'Other District'];
   }, [formData.state]);
 
-  // Dynamic max DOB attribute based on gender
   const maxDobDate = useMemo(() => {
     if (!formData.gender) return '';
     return getMaxDobForGender(formData.gender);
   }, [formData.gender]);
 
-  // Step 0: Send Initial OTP
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarPreview(reader.result);
+      toast.success('Photo uploaded successfully.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setAvatarPreview('');
+  };
+
+  const handleToggleLanguage = (lang) => {
+    setSelectedLanguages(prev => {
+      if (prev.includes(lang)) {
+        if (prev.length === 1) {
+          toast.info('At least one language must be selected.');
+          return prev;
+        }
+        return prev.filter(l => l !== lang);
+      } else {
+        return [...prev, lang];
+      }
+    });
+  };
+
+  const handleVerifyMobileChange = (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setVerifyMobile(val);
+    setVerifyOtp('');
+    setOtpSent(false);
+  };
+
   const handleSendInitialOtp = async (e) => {
     if (e) e.preventDefault();
     const cleanMobile = verifyMobile.replace(/\D/g, '');
@@ -253,9 +275,9 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       setOtpSending(true);
       await api.sendOtp(cleanMobile, false);
       setOtpSent(true);
-      setVerifyOtp('123456'); // Hardcoded default code pre-filled
+      setVerifyOtp('');
       setOtpCountdown(30);
-      toast.success(`OTP sent to +91 ${cleanMobile}! Default code: 123456`);
+      toast.success(`OTP sent to +91 ${cleanMobile}!`);
     } catch (err) {
       toast.error(err.message || 'Failed to send OTP. Please try again.');
     } finally {
@@ -263,7 +285,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
     }
   };
 
-  // Step 0: Verify OTP & Check User Existence
   const handleVerifyInitialOtp = async (e) => {
     if (e) e.preventDefault();
     const cleanMobile = verifyMobile.replace(/\D/g, '');
@@ -272,7 +293,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       return;
     }
     if (!verifyOtp || verifyOtp.trim().length !== 6) {
-      toast.error('Please enter the 6-digit OTP code (123456).');
+      toast.error('Please enter the 6-digit OTP code.');
       return;
     }
 
@@ -280,18 +301,21 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       setOtpVerifying(true);
       const res = await api.verifyRegistrationOtp(cleanMobile, verifyOtp.trim());
 
-      if (res.exists || res.registered) {
-        toast.info('This mobile number is already registered! Redirecting to Sign In...');
+      if (res.user || res.exists || res.registered) {
+        toast.info('This mobile number is already registered! Signing you in...');
+        if (onAuthSuccess && res.user) {
+          onAuthSuccess(res.user);
+        }
         setTimeout(() => {
-          if (onOpenAuth) {
-            onOpenAuth();
+          if (res.user?.role === 'admin') {
+            navigate('/admin', { replace: true });
+          } else {
+            navigate('/dashboard', { replace: true });
           }
-          navigate('/', { replace: true });
-        }, 1500);
+        }, 1000);
         return;
       }
 
-      // Mobile is verified & new -> proceed to Step 1
       toast.success('Mobile number verified! Please complete your registration details.');
       setFormData(prev => ({
         ...prev,
@@ -299,7 +323,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       }));
       setActiveStep(1);
     } catch (err) {
-      toast.error(err.message || 'Invalid OTP code. Please enter 123456.');
+      toast.error(err.message || 'Invalid OTP code.');
     } finally {
       setOtpVerifying(false);
     }
@@ -308,18 +332,16 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   const handleChange = (field, value) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
-      // When state changes, reset district to first available district
       if (field === 'state') {
         const districts = INDIAN_STATES_AND_DISTRICTS[value] || [];
         updated.district = districts[0] || '';
       }
-      // If gender changes, check if existing DOB complies with new restriction
       if (field === 'gender') {
         if (updated.dob) {
           const age = calculateAge(updated.dob);
           const minAge = value === 'Male' ? 21 : 18;
           if (age !== null && age < minAge) {
-            updated.dob = ''; // reset invalid date
+            updated.dob = '';
             toast.warning(`Note: Minimum age for ${value} is ${minAge} years. Please re-enter date of birth.`);
           }
         }
@@ -400,6 +422,10 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       errs.preferredCounselingMode = 'Please select your preferred session mode.';
     }
 
+    if (selectedLanguages.length === 0) {
+      errs.languages = 'Please select at least one preferred language.';
+    }
+
     if (!formData.counselingRequirements || formData.counselingRequirements.trim().length < 10) {
       errs.counselingRequirements = 'Please provide at least 10 characters so we can match the best counsellor.';
     }
@@ -448,13 +474,15 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
         name: formData.name.trim(),
         mobile: formData.mobile.replace(/\D/g, ''),
         email: formData.email ? formData.email.trim() : '',
+        avatar: avatarPreview || '',
         gender: formData.gender,
         dob: formData.dob,
         state: formData.state,
         district: formData.district,
         city: formData.district,
         address: formData.address ? formData.address.trim() : '',
-        preferredLanguage: formData.preferredLanguage,
+        languages: selectedLanguages,
+        preferredLanguage: selectedLanguages.join(', '),
         preferredCounselingMode: formData.preferredCounselingMode,
         counselingRequirements: formData.counselingRequirements.trim(),
         caseId: caseId,
@@ -463,16 +491,13 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       };
 
       const res = await api.register(payload);
-      setIsSuccess(true);
       toast.success('Registration completed successfully! Welcome to Counselling Program.');
 
-      if (onAuthSuccess) {
+      if (onAuthSuccess && res.user) {
         onAuthSuccess(res.user);
       }
 
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2500);
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -481,100 +506,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   };
 
   const allConsentsSelected = CONSENT_ITEMS.every(item => consents[item.id]);
-
-  // Success State Card
-  if (isSuccess) {
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          py: { xs: 4, sm: 8 },
-          background: 'radial-gradient(circle at 10% 20%, rgba(243, 232, 255, 0.6) 0%, rgba(241, 245, 249, 0.88) 90%), url(/registration-bg.png)',
-          backgroundSize: 'cover',
-          backgroundAttachment: 'fixed',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Container maxWidth="sm">
-          <Card
-            elevation={0}
-            sx={{
-              p: { xs: 4, sm: 6 },
-              borderRadius: '24px',
-              textAlign: 'center',
-              border: '1px solid #e2e8f0',
-              bgcolor: '#ffffff',
-              boxShadow: '0 20px 45px rgba(15, 23, 42, 0.08)'
-            }}
-          >
-            <Box
-              sx={{
-                width: 72,
-                height: 72,
-                borderRadius: '50%',
-                bgcolor: '#dcfce7',
-                color: '#16a34a',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mb: 2.5
-              }}
-            >
-              <CheckCircleIcon sx={{ fontSize: 44 }} />
-            </Box>
-            <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 800, color: '#1e1b4b', mb: 1 }}>
-              Intake Registration Complete!
-            </Typography>
-            <Typography variant="body1" sx={{ color: '#64748b', mb: 3 }}>
-              Your confidential client profile and case file have been successfully established.
-            </Typography>
-
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5,
-                bgcolor: '#f8fafc',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                mb: 4,
-                textAlign: 'left'
-              }}
-            >
-              <Typography variant="caption" sx={{ fontWeight: 800, color: '#4c3b71', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'block', mb: 1 }}>
-                Registered Case Credentials
-              </Typography>
-              <Grid container spacing={1.5}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Case ID</Typography>
-                  <Typography variant="body2" fontWeight={800} color="#7c3aed">{caseId}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Mobile</Typography>
-                  <Typography variant="body2" fontWeight={700} color="#1e1b4b">+91 {formData.mobile}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Participant</Typography>
-                  <Typography variant="body2" fontWeight={700} color="#1e1b4b">{formData.name}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Session Format</Typography>
-                  <Typography variant="body2" fontWeight={700} color="#1e1b4b">{formData.preferredCounselingMode}</Typography>
-                </Grid>
-              </Grid>
-            </Paper>
-
-            <CircularProgress size={28} sx={{ color: '#4c3b71', mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
-              Redirecting you directly to your confidential dashboard...
-            </Typography>
-          </Card>
-        </Container>
-      </Box>
-    );
-  }
-
   return (
     <Box
       sx={{
@@ -587,22 +518,18 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       }}
     >
       <Container maxWidth="md">
-
-        {/* Top Stepper Header matching attached design */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3.5, px: 1, flexWrap: 'wrap', gap: 2 }}>
-
-          {/* Left Progress Step Info */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
                 sx={{
-                  width: 26,
-                  height: 26,
+                  width: 28,
+                  height: 28,
                   borderRadius: '50%',
                   bgcolor: activeStep >= 1 ? '#4c3b71' : '#cbd5e1',
                   color: '#ffffff',
                   fontWeight: 800,
-                  fontSize: '0.78rem',
+                  fontSize: '0.8rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -610,8 +537,8 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               >
                 1
               </Box>
-              <Typography sx={{ fontWeight: 700, fontSize: '0.82rem', color: activeStep === 1 ? '#4c3b71' : '#64748b' }}>
-                Personal & Session
+              <Typography sx={{ fontWeight: 700, fontSize: '0.84rem', color: activeStep === 1 ? '#4c3b71' : '#64748b' }}>
+                Personal & Session Details
               </Typography>
             </Box>
 
@@ -620,13 +547,13 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
                 sx={{
-                  width: 26,
-                  height: 26,
+                  width: 28,
+                  height: 28,
                   borderRadius: '50%',
                   bgcolor: activeStep === 2 ? '#4c3b71' : '#e2e8f0',
                   color: activeStep === 2 ? '#ffffff' : '#64748b',
                   fontWeight: 800,
-                  fontSize: '0.78rem',
+                  fontSize: '0.8rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -634,45 +561,13 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               >
                 2
               </Box>
-              <Typography sx={{ fontWeight: 700, fontSize: '0.82rem', color: activeStep === 2 ? '#4c3b71' : '#94a3b8' }}>
-                Consent & Verify
+              <Typography sx={{ fontWeight: 700, fontSize: '0.84rem', color: activeStep === 2 ? '#4c3b71' : '#94a3b8' }}>
+                Consent & Confirmation
               </Typography>
-            </Box>
-          </Box>
-
-          {/* Right Stage Badges */}
-          <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.5 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.8,
-                px: 1.75,
-                py: 0.6,
-                borderRadius: '99px',
-                bgcolor: activeStep === 1 ? '#4c3b71' : '#f1f5f9',
-                color: activeStep === 1 ? '#ffffff' : '#64748b',
-                fontWeight: 700,
-                fontSize: '0.76rem',
-              }}
-            >
-              <SpaIcon sx={{ fontSize: 14 }} />
-              Step 1: Intake
-            </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, fontSize: '0.76rem', fontWeight: 600, color: activeStep === 2 ? '#4c3b71' : '#94a3b8' }}>
-              <CheckCircleIcon sx={{ fontSize: 15, color: activeStep === 2 ? '#4c3b71' : '#cbd5e1' }} />
-              Step 2: Consent
-            </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, fontSize: '0.76rem', fontWeight: 600, color: '#94a3b8' }}>
-              <CheckCircleIcon sx={{ fontSize: 15, color: '#cbd5e1' }} />
-              Success
             </Box>
           </Box>
         </Box>
 
-        {/* STEP 0: MOBILE FIRST OTP VERIFICATION */}
         {activeStep === 0 && (
           <Card
             elevation={0}
@@ -701,30 +596,29 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Box>
               <Box>
                 <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, color: '#1e1b4b', fontSize: { xs: '1.25rem', sm: '1.45rem' } }}>
-                  Step 0 — Mobile Number Verification
+                  Mobile Number Verification
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#64748b' }}>
-                  Please enter your mobile number. We will verify your number before starting registration.
+                  Please enter your mobile number to verify and start registration.
                 </Typography>
               </Box>
             </Box>
 
             <Alert severity="info" sx={{ mb: 3.5, borderRadius: '12px', bgcolor: '#f3e8ff', color: '#6b21a8', border: '1px solid #e9d5ff', '& .MuiAlert-icon': { color: '#7c3aed' } }}>
-              New users will be taken directly to the registration intake form. If you already have an account, you will be redirected to sign in.
+              New users will be taken directly to the registration intake form. If you already have an account, you will be signed in.
             </Alert>
 
             <Box component="form" onSubmit={otpSent ? handleVerifyInitialOtp : handleSendInitialOtp}>
               <Grid container spacing={3}>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     10-Digit Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
                   <TextField
                     fullWidth
-                    placeholder="e.g. 98765 43210"
                     disabled={otpSent}
                     value={verifyMobile}
-                    onChange={(e) => setVerifyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={handleVerifyMobileChange}
                     inputProps={{ maxLength: 10, inputMode: 'numeric' }}
                     InputProps={{
                       startAdornment: (
@@ -743,13 +637,12 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                 </Grid>
 
                 {otpSent && (
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }} sx={{ width: '100%' }}>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                       6-Digit OTP Verification Code <span style={{ color: '#ef4444' }}>*</span>
                     </Typography>
                     <TextField
                       fullWidth
-                      placeholder="Enter 6-digit code"
                       value={verifyOtp}
                       onChange={(e) => setVerifyOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       inputProps={{ maxLength: 6, inputMode: 'numeric' }}
@@ -760,7 +653,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                           </InputAdornment>
                         )
                       }}
-                      helperText="Default test verification code: 123456"
+                      helperText="Enter 6-digit verification code"
                       sx={formFieldSx}
                       autoFocus
                     />
@@ -814,8 +707,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
             </Box>
           </Card>
         )}
-
-        {/* STEP 1: PERSONAL, DEMOGRAPHIC & CLINICAL DETAILS */}
         {activeStep === 1 && (
           <Card
             elevation={0}
@@ -827,7 +718,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               boxShadow: '0 20px 45px rgba(15, 23, 42, 0.06)',
             }}
           >
-            {/* Header matching screenshot */}
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Box
@@ -849,15 +739,73 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                     Step 1 — Personal & Session Information
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#64748b' }}>
-                    Please provide your contact details and counseling preferences.
+                    Please provide your contact details, profile photo, and counseling preferences.
                   </Typography>
                 </Box>
               </Box>
-
-
             </Box>
 
-            {/* SECTION 1: IDENTIFICATION */}
+            <Box sx={{ mb: 4, p: 2.5, bgcolor: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, flexWrap: 'wrap' }}>
+                <Avatar
+                  src={avatarPreview || (formData.name ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(formData.name)}` : '')}
+                  sx={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: '18px',
+                    border: '2px solid #7c3aed',
+                    boxShadow: '0 4px 12px rgba(124, 58, 237, 0.15)',
+                    bgcolor: '#ede9fe',
+                    color: '#6b21a8',
+                    fontSize: '1.5rem',
+                    fontWeight: 800
+                  }}
+                >
+                  {formData.name ? formData.name[0].toUpperCase() : <PersonOutlinedIcon />}
+                </Avatar>
+
+                <Box sx={{ flex: 1 }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e1b4b' }}>
+                    Profile Photo (Optional)
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 1 }}>
+                    Upload your profile picture. It will be displayed on your profile and dashboard.
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      size="small"
+                      startIcon={<PhotoCameraIcon />}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        borderRadius: '10px',
+                        borderColor: '#7c3aed',
+                        color: '#7c3aed',
+                        '&:hover': { borderColor: '#6b21a8', bgcolor: '#f3e8ff' }
+                      }}
+                    >
+                      Upload Photo
+                      <input type="file" hidden accept="image/*" onChange={handlePhotoUpload} />
+                    </Button>
+                    {avatarPreview && (
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<DeleteOutlinedIcon />}
+                        onClick={handleRemovePhoto}
+                        sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.82rem' }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+
             <Box sx={{ mb: 4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', fontWeight: 800, color: '#4c3b71', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
@@ -867,8 +815,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Box>
 
               <Grid container spacing={2.5}>
-                {/* Full Name */}
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }} sx={{ width: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b' }}>
                       Full Name <span style={{ color: '#ef4444' }}>*</span>
@@ -879,7 +826,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   </Box>
                   <TextField
                     fullWidth
-                    placeholder="Siddharth Rao"
                     value={formData.name}
                     onChange={(e) => handleChange('name', e.target.value)}
                     error={Boolean(errors.name)}
@@ -895,8 +841,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   />
                 </Grid>
 
-                {/* Mobile Number (Locked Verified) */}
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
@@ -923,14 +868,12 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   />
                 </Grid>
 
-                {/* Email Address */}
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
-                    Email Address <span style={{ color: '#ef4444' }}>*</span>
+                    Email Address
                   </Typography>
                   <TextField
                     fullWidth
-                    placeholder="siddharth.rao@example.com"
                     value={formData.email}
                     onChange={(e) => handleChange('email', e.target.value)}
                     error={Boolean(errors.email)}
@@ -946,8 +889,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   />
                 </Grid>
 
-                {/* Gender First Selection */}
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     Gender <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
@@ -975,8 +917,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   </FormControl>
                 </Grid>
 
-                {/* Date of Birth (Enabled after gender) */}
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     Date of Birth <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
@@ -1013,7 +954,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Grid>
             </Box>
 
-            {/* SECTION 2: RESIDENTIAL LOCATION */}
             <Box sx={{ mb: 4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', fontWeight: 800, color: '#4c3b71', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
@@ -1023,8 +963,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Box>
 
               <Grid container spacing={2.5}>
-                {/* State Selection */}
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     State / UT <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
@@ -1050,8 +989,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   </FormControl>
                 </Grid>
 
-                {/* District Selection */}
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     City / District <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
@@ -1078,16 +1016,14 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   </FormControl>
                 </Grid>
 
-                {/* Address Multiline Textarea */}
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
-                    Complete Address (Optional)
+                    Complete Residential Address (Optional)
                   </Typography>
                   <TextField
                     fullWidth
                     multiline
-                    rows={2}
-                    // placeholder="Flat 402, Green Valley Apartments, MG Road..."
+                    rows={3}
                     value={formData.address}
                     onChange={(e) => handleChange('address', e.target.value)}
                     sx={formFieldSx}
@@ -1096,102 +1032,97 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Grid>
             </Box>
 
-            {/* SECTION 3: CONSULTATION FORMAT */}
             <Box sx={{ mb: 4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', fontWeight: 800, color: '#4c3b71', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
-                  3. CONSULTATION FORMAT
+                  3. CONSULTATION FORMAT & LANGUAGES
                 </Typography>
                 <Box sx={{ flexGrow: 1, height: '1px', bgcolor: '#e2e8f0' }} />
               </Box>
 
               <Grid container spacing={2.5}>
-                {/* Preferred Language */}
-                <Grid item xs={12} sm={6}>
+                {/* 1) Preferred Languages for Counseling: Multiselect dropdown with English, Hindi, Marathi */}
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
-                    Preferred Language <span style={{ color: '#ef4444' }}>*</span>
+                    Preferred Languages for Counseling <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
-                  <FormControl fullWidth sx={formFieldSx}>
+                  <FormControl fullWidth error={Boolean(errors.languages)} sx={formFieldSx}>
                     <Select
-                      value={formData.preferredLanguage}
-                      onChange={(e) => handleChange('preferredLanguage', e.target.value)}
+                      multiple
+                      displayEmpty
+                      value={selectedLanguages}
+                      onChange={(e) => {
+                        const val = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value;
+                        setSelectedLanguages(val);
+                      }}
+                      input={<OutlinedInput />}
                       startAdornment={
                         <InputAdornment position="start">
                           <TranslateOutlinedIcon sx={{ color: '#64748b', fontSize: 20 }} />
                         </InputAdornment>
                       }
+                      renderValue={(selected) => {
+                        if (!selected || selected.length === 0) {
+                          return <span style={{ color: '#94a3b8' }}>Select Languages</span>;
+                        }
+                        return (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {selected.map((val) => (
+                              <Chip
+                                key={val}
+                                label={val}
+                                size="small"
+                                sx={{
+                                  borderRadius: '6px',
+                                  fontWeight: 600,
+                                  bgcolor: '#ede9fe',
+                                  color: '#6b21a8'
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        );
+                      }}
                     >
-                      {LANGUAGES.map(lang => (
-                        <MenuItem key={lang} value={lang}>{lang}</MenuItem>
+                      {ALL_LANGUAGES.map((lang) => (
+                        <MenuItem key={lang} value={lang}>
+                          <Checkbox checked={selectedLanguages.indexOf(lang) > -1} />
+                          <ListItemText primary={lang} />
+                        </MenuItem>
                       ))}
                     </Select>
+                    {errors.languages && <FormHelperText>{errors.languages}</FormHelperText>}
                   </FormControl>
                 </Grid>
 
-                {/* Preferred Session Mode matching screenshot buttons */}
-                <Grid item xs={12} sm={6}>
+                {/* 2) Preferred Session Mode: Online, Offline */}
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     Preferred Session Mode <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={6}>
-                      <Paper
-                        elevation={0}
-                        onClick={() => handleChange('preferredCounselingMode', 'Online')}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: '12px',
-                          border: '2px solid',
-                          borderColor: formData.preferredCounselingMode === 'Online' ? '#7c3aed' : '#e2e8f0',
-                          bgcolor: formData.preferredCounselingMode === 'Online' ? '#f3e8ff' : '#f8fafc',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 0.5,
-                          transition: 'all 0.2s ease',
-                          '&:hover': { borderColor: '#7c3aed' }
-                        }}
-                      >
-                        <VideocamOutlinedIcon sx={{ color: formData.preferredCounselingMode === 'Online' ? '#7c3aed' : '#64748b', fontSize: 22 }} />
-                        <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: formData.preferredCounselingMode === 'Online' ? '#6b21a8' : '#475569' }}>
-                          Online
-                        </Typography>
-                      </Paper>
-                    </Grid>
-
-                    <Grid item xs={6}>
-                      <Paper
-                        elevation={0}
-                        onClick={() => handleChange('preferredCounselingMode', 'Offline')}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: '12px',
-                          border: '2px solid',
-                          borderColor: formData.preferredCounselingMode === 'Offline' ? '#7c3aed' : '#e2e8f0',
-                          bgcolor: formData.preferredCounselingMode === 'Offline' ? '#f3e8ff' : '#f8fafc',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 0.5,
-                          transition: 'all 0.2s ease',
-                          '&:hover': { borderColor: '#7c3aed' }
-                        }}
-                      >
-                        <GroupsIcon sx={{ color: formData.preferredCounselingMode === 'Offline' ? '#7c3aed' : '#64748b', fontSize: 22 }} />
-                        <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: formData.preferredCounselingMode === 'Offline' ? '#6b21a8' : '#475569' }}>
-                          Offline
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  </Grid>
+                  <FormControl fullWidth error={Boolean(errors.preferredCounselingMode)} sx={formFieldSx}>
+                    <Select
+                      value={formData.preferredCounselingMode || 'Online'}
+                      onChange={(e) => handleChange('preferredCounselingMode', e.target.value)}
+                      startAdornment={
+                        <InputAdornment position="start">
+                          {formData.preferredCounselingMode === 'Offline' ? (
+                            <GroupsIcon sx={{ color: '#64748b', fontSize: 20 }} />
+                          ) : (
+                            <VideocamOutlinedIcon sx={{ color: '#64748b', fontSize: 20 }} />
+                          )}
+                        </InputAdornment>
+                      }
+                    >
+                      <MenuItem value="Online">Online</MenuItem>
+                      <MenuItem value="Offline">Offline</MenuItem>
+                    </Select>
+                    {errors.preferredCounselingMode && <FormHelperText>{errors.preferredCounselingMode}</FormHelperText>}
+                  </FormControl>
                 </Grid>
 
-                {/* Brief Description */}
-                <Grid item xs={12}>
+                {/* 3) Brief Description of Counseling Needs / Goals: Full width (100%) */}
+                <Grid size={{ xs: 12 }} sx={{ width: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b' }}>
                       Brief Description of Counseling Needs / Goals <span style={{ color: '#ef4444' }}>*</span>
@@ -1203,20 +1134,17 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   <TextField
                     fullWidth
                     multiline
-                    rows={3} S
-                    // placeholder="Experiencing elevated work-related burnout and sleep anxiety over the past 3 months. Hoping to acquire cognitive grounding techniques and structured boundary-setting tools."
+                    rows={4}
                     value={formData.counselingRequirements}
                     onChange={(e) => handleChange('counselingRequirements', e.target.value.slice(0, 500))}
                     error={Boolean(errors.counselingRequirements)}
-                    helperText={errors.counselingRequirements || 'Please provide at least 10 characters so we can match the best counsellor for you.'}
-                    // sx={formFieldSx}
-                    sx={{ backgroundColor: "#f1f5f9", width: "50vw" }}
+                    helperText={errors.counselingRequirements || 'Please provide details so we can match the best counsellor for you.'}
+                    sx={{ width: '100%', ...formFieldSx }}
                   />
                 </Grid>
               </Grid>
             </Box>
 
-            {/* Bottom Actions matching screenshot */}
             <Box
               sx={{
                 display: 'flex',
@@ -1244,7 +1172,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                 onClick={handleProceedToStep2}
                 endIcon={<ArrowForwardIcon />}
                 sx={{
-                  bgcolor: '#584482',
+                  bgcolor: '#4c3b71',
                   color: '#ffffff',
                   fontWeight: 700,
                   fontSize: '0.92rem',
@@ -1261,8 +1189,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
             </Box>
           </Card>
         )}
-
-        {/* STEP 2: INFORMED CONSENT & VERIFICATION */}
         {activeStep === 2 && (
           <Card
             elevation={0}
@@ -1299,7 +1225,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Box>
             </Box>
 
-            {/* Summary Box */}
             <Paper
               elevation={0}
               sx={{
@@ -1314,42 +1239,41 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                 Intake Participant Summary
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
+                <Grid size={{ xs: 12, sm: 4 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Legal Participant Name</Typography>
                   <Typography variant="body2" fontWeight={700} color="#1e1b4b">{formData.name}</Typography>
                 </Grid>
-                <Grid item xs={6} sm={4}>
+                <Grid size={{ xs: 6, sm: 4 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Mobile Number</Typography>
                   <Typography variant="body2" fontWeight={700} color="#1e1b4b">+91 {formData.mobile}</Typography>
                 </Grid>
-                <Grid item xs={6} sm={4}>
+                <Grid size={{ xs: 6, sm: 4 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Assigned Case ID</Typography>
                   <Typography variant="body2" fontWeight={700} color="#7c3aed">{caseId}</Typography>
                 </Grid>
-                <Grid item xs={12} sm={4}>
+                <Grid size={{ xs: 12, sm: 4 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Email Address</Typography>
-                  <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.email}</Typography>
+                  <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.email || 'Not provided'}</Typography>
                 </Grid>
-                <Grid item xs={6} sm={4}>
+                <Grid size={{ xs: 6, sm: 4 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Gender & Age</Typography>
                   <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.gender} ({calculateAge(formData.dob)} yrs)</Typography>
                 </Grid>
-                <Grid item xs={6} sm={4}>
+                <Grid size={{ xs: 6, sm: 4 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Location</Typography>
                   <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.district}, {formData.state}</Typography>
                 </Grid>
-                <Grid item xs={12} sm={8}>
-                  <Typography variant="caption" color="text.secondary">Address</Typography>
-                  <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.address || 'Not specified'}</Typography>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
+                  <Typography variant="caption" color="text.secondary">Languages</Typography>
+                  <Typography variant="body2" fontWeight={600} color="#1e1b4b">{selectedLanguages.join(', ')}</Typography>
                 </Grid>
-                <Grid item xs={6} sm={4}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ width: '100%' }}>
                   <Typography variant="caption" color="text.secondary">Format & Mode</Typography>
-                  <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.preferredCounselingMode} ({formData.preferredLanguage})</Typography>
+                  <Typography variant="body2" fontWeight={600} color="#1e1b4b">{formData.preferredCounselingMode}</Typography>
                 </Grid>
               </Grid>
             </Paper>
 
-            {/* Consent Checkboxes */}
             <Box sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: '#4c3b71', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
@@ -1412,7 +1336,6 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
               </Box>
             </Box>
 
-            {/* Bottom Actions */}
             <Box
               sx={{
                 display: 'flex',
@@ -1439,7 +1362,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                 disabled={submitting}
                 endIcon={<AssignmentTurnedInIcon />}
                 sx={{
-                  bgcolor: '#584482',
+                  bgcolor: '#4c3b71',
                   color: '#ffffff',
                   fontWeight: 700,
                   fontSize: '0.92rem',

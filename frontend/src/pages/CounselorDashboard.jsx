@@ -103,6 +103,26 @@ export default function CounselorDashboard({ currentUser }) {
       <Typography variant="caption" color="primary" sx={{ fontWeight: 700, mr: 1 }}>BJS care pathway</Typography>
       {['Admin review', 'Discovery notes', 'Counselor matched', 'Sessions & notes', 'Care complete'].map((stage, i) => <Chip key={stage} size="small" label={`${i + 1}. ${stage}`} variant="outlined" sx={{ height: 22, fontSize: 11 }} />)}
     </Paper>
+        {!currentUser?.approved && (
+      <Alert
+        severity="warning"
+        sx={{
+          mb: 2.5,
+          borderRadius: 2,
+          bgcolor: '#fffbeb',
+          color: '#92400e',
+          border: '1px solid #fde68a',
+          p: 2
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+          Your profile is under review
+        </Typography>
+        <Typography variant="body2" sx={{ fontSize: '0.88rem' }}>
+          Your counselor credentials and profile are currently under review by the administrator. Case assignments and booking access will be activated upon approval.
+        </Typography>
+      </Alert>
+    )}
     {error && !noteAppointment && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
     {!!awaitingOutcome.length && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => selectTab(4)}>Review outcomes</Button>}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended and need attendance confirmation.</Alert>}

@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -38,7 +39,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const [appointments, setAppointments] = useState([]);
   useEffect(() => {
     let active = true;
-    const refresh = () => api.getAppointments().then(data => { if (active) setAppointments(data); }).catch(() => {});
+    const refresh = () => api.getAppointments().then(data => { if (active) setAppointments(data); }).catch(() => { });
     window.addEventListener('focus', refresh);
     return () => { active = false; window.removeEventListener('focus', refresh); };
   }, []);
@@ -207,8 +208,57 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
+      {!currentUser?.approved && (
+        <Alert
+          severity="warning"
+          icon={<HourglassEmptyIcon />}
+          sx={{
+            mb: 3,
+            borderRadius: 3,
+            bgcolor: '#fffbeb',
+            color: '#92400e',
+            border: '1px solid #fde68a',
+            '& .MuiAlert-icon': { color: '#d97706' },
+            p: 2.25
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: 'Outfit', mb: 0.5, fontSize: '0.98rem' }}>
+            Your profile is under review
+          </Typography>
+          <Typography variant="body2" sx={{ fontSize: '0.88rem', color: '#78350f' }}>
+            Your registration details and case file have been submitted and are currently awaiting administrative review. Access to schedule and book new counseling consultations will be enabled once your account is approved.
+          </Typography>
+        </Alert>
+      )}
+
+      {!currentUser?.approved && (
+        <Alert
+          severity="warning"
+          icon={<HourglassEmptyIcon />}
+          sx={{
+            mb: 3,
+            borderRadius: 3,
+            bgcolor: '#fffbeb',
+            color: '#92400e',
+            border: '1px solid #fde68a',
+            '& .MuiAlert-icon': { color: '#d97706' },
+            p: 2.25
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: 'Outfit', mb: 0.5, fontSize: '0.98rem' }}>
+            Your profile is under review
+          </Typography>
+          <Typography variant="body2" sx={{ fontSize: '0.88rem', color: '#78350f' }}>
+            Your registration details and case file have been submitted and are currently awaiting administrative review. Access to schedule and book new counseling consultations will be enabled once your account is approved.
+          </Typography>
+        </Alert>
+      )}
+
       {!!feedbackPending.length && <Alert severity="info" sx={{ mb: 2 }} action={<Button size="small" onClick={() => handleOpenReview(feedbackPending[0])}>Add feedback</Button>}>{feedbackPending.length} completed session{feedbackPending.length === 1 ? '' : 's'} awaiting your feedback.</Alert>}
       {!!awaitingOutcome.length && <Alert severity="info" sx={{ mb: 2 }}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended. Your counselor will confirm attendance before feedback becomes available. See Past journey for the status.</Alert>}
+
+      {/* {!!feedbackPending.length && <Alert severity="info" sx={{ mb: 2 }} action={<Button size="small" onClick={() => handleOpenReview(feedbackPending[0])}>Add feedback</Button>}>{feedbackPending.length} completed session{feedbackPending.length === 1 ? '' : 's'} awaiting your feedback.</Alert>}
+      {!!awaitingOutcome.length && <Alert severity="info" sx={{ mb: 2 }}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended. Your counselor will confirm attendance before feedback becomes available. See Past journey for the status.</Alert>} */}
       <Card sx={{ mb: 3, borderRadius: 3, overflow: 'hidden' }}>
         <Grid container>
           <Grid size={{ xs: 12, md: 3 }}>
@@ -440,13 +490,13 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                     </Typography>
                   </Box>
 
-                  <Button
+                  {/* <Button
                     size="small"
                     variant="outlined"
                     onClick={() => navigate('/')}
                   >
                     Request a session
-                  </Button>
+                  </Button> */}
                 </Paper>
               ) : (
                 <Stack spacing={2}>
