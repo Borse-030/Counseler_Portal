@@ -285,6 +285,8 @@ export const api = {
   },
 
   recordSessionOutcome: async (id, data) => request(`/appointments/${id}/outcome`, { method: 'POST', body: JSON.stringify(data) }),
+  requestReschedule: async (id, data) => request(`/appointments/${id}/reschedule-request`, { method: 'POST', body: JSON.stringify(data) }),
+  reviewReschedule: async (id, data) => request(`/appointments/${id}/reschedule-review`, { method: 'POST', body: JSON.stringify(data) }),
 
   submitReview: async (id, reviewText) => {
     return request(`/appointments/${id}/review`, {

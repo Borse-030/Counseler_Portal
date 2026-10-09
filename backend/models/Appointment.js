@@ -7,6 +7,15 @@ const SessionNoteHistorySchema = new mongoose.Schema({
   at: { type: Date, default: Date.now },
 }, { _id: false });
 
+const RescheduleRequestSchema = new mongoose.Schema({
+  id: String, status: { type: String, enum: ['pending', 'scheduling', 'scheduled', 'declined'] },
+  requesterId: String, requesterName: String, requesterRole: String, reason: String,
+  preferredDate: String, preferredTime: String, requestedAt: Date,
+  reviewerId: String, reviewerName: String, reviewedAt: Date, response: String,
+  replacementId: String, replacementDate: String, replacementTime: String,
+  lockToken: String, leaseUntil: Date, plannedDate: String, plannedTime: String, plannedMeetingLink: String,
+}, { _id: false });
+
 const AppointmentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   careRequestId: { type: String, default: '' },
@@ -39,6 +48,9 @@ const AppointmentSchema = new mongoose.Schema({
     previousStatus: String, outcome: String, actorId: String, actorName: String,
     actorRole: String, reason: String, at: Date,
   }, { _id: false })], default: [] },
+  rescheduledFromId: { type: String, default: '' },
+  rescheduleRequest: { type: RescheduleRequestSchema, default: undefined },
+  rescheduleHistory: { type: [RescheduleRequestSchema], default: [] },
   feedbackRequestedAt: { type: Date },
   review: {
     reviewText: { type: String },

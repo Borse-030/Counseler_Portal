@@ -1,3 +1,5 @@
+import ReschedulePanel from '../components/ReschedulePanel';
+import { mergeRescheduleResult } from '../utils/rescheduling';
 import { feedbackEligible, hasFeedback, resolvedStatuses, sessionStatus, statusLabel } from '../utils/sessionOutcome';
 import useSessionClock from '../hooks/useSessionClock';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -923,6 +925,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                           <Box sx={{ width: '100%' }}><Typography variant="caption" color="text.secondary">Your feedback · {new Date(apt.review.date).toLocaleDateString('en-IN')}</Typography><Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{apt.review.reviewText || 'No written feedback was provided.'}</Typography></Box>
                         ) : <Button variant="outlined" size="small" startIcon={<RateReviewIcon />} onClick={() => handleOpenReview(apt)}>Share feedback</Button>)}
                       </Box>
+                      <ReschedulePanel appointment={apt} currentUser={currentUser} onUpdated={result => setAppointments(previous => mergeRescheduleResult(previous, result))} />
+                      <Button size="small" sx={{ mt: 1 }} onClick={() => navigate('/session/' + apt.id)}>Session details</Button>
                     </CardContent>
                   </Card>
                 </Grid>

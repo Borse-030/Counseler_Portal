@@ -1,3 +1,4 @@
+import { mergeRescheduleResult, pendingReschedule } from '../utils/rescheduling';
 import { hasFeedback } from '../utils/sessionOutcome';
 import AdminScheduleSession from '../components/AdminScheduleSession';
 import SessionOverview from '../components/SessionOverview';
@@ -341,6 +342,7 @@ export default function AdminDashboard({ currentUser }) {
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {!!appointments.filter(pendingReschedule).length && activeTab !== 5 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => selectSection(5)}>Review requests</Button>}>{appointments.filter(pendingReschedule).length} rescheduling request(s) awaiting review.</Alert>}
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2 }}>{success}</Alert>}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 1.5, mb: 2.5 }}>
@@ -370,7 +372,7 @@ export default function AdminDashboard({ currentUser }) {
       </Box>
 
       <Box id="admin-directory" role="tabpanel" aria-labelledby={`admin-tab-${activeTab}`}>
-        {activeTab === 5 && <SessionOverview appointments={appointments} />}
+        {activeTab === 5 && <SessionOverview appointments={appointments} currentUser={currentUser} onUpdated={result => setAppointments(previous => mergeRescheduleResult(previous, result))} />}
         <Alert severity="info" sx={{ display: activeTab === 5 ? 'none' : 'flex', mb: 2, border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5, fontSize: 12 }}>
           {activeTab === 0 ? 'Review new applications first. Approved users move to discovery before counselor assignment.' : activeTab === 1 ? 'Open a case to review discovery notes, then match a counselor and schedule a session.' : activeTab === 2 ? 'Review your active counseling panel, current assignments, and completed sessions.' : activeTab === 3 ? 'Record discovery observations and match each approved user with the right counselor.' : 'Review deactivated accounts and reactivate them when they are ready to return.'}
         </Alert>

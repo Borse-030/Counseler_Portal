@@ -30,6 +30,7 @@ const setup = ({ role = 'counselor', actorId = 'c', overrides = {}, collision = 
         updates.push({ query, changes });
         Object.assign(store, changes.$set);
         if (changes.$push?.outcomeHistory) store.outcomeHistory.push(changes.$push.outcomeHistory);
+        if (changes.$push?.rescheduleHistory) (store.rescheduleHistory ??= []).push(changes.$push.rescheduleHistory);
         return structuredClone(store);
       },
     },
@@ -121,6 +122,25 @@ test('all absence outcomes are distinct, never request feedback and cannot be re
     assert.equal(feedbackLabel(h.store), 'Not applicable');
     const patient = setup({ role: 'patient', actorId: 'p', overrides: { status: outcome } });
     assert.equal((await patient.invoke('submitReview', { reviewText: 'Helpful session.' })).code, 400);
+  }
+});
+
+test('confirming completion closes a pending replacement request once and preserves the request history', async () => {
+  const h = setup({ overrides: { rescheduleRequest: { id: 'request', status: 'pending', requesterId: 'p', reason: 'Attendance unclear' }, rescheduleHistory: [{ id: 'request', status: 'pending' }] } });
+  assert.equal((await h.invoke('recordSessionOutcome', { outcome: 'completed' })).code, 200);
+  assert.equal(h.store.rescheduleRequest.status, 'declined');
+  assert.equal(h.store.rescheduleHistory.length, 2);
+  assert.match(h.store.rescheduleRequest.response, /confirmed as completed/);
+  assert.equal(h.notifications.length, 2);
+  await h.invoke('recordSessionOutcome', { outcome: 'completed' });
+  assert.equal(h.notifications.length, 2);
+});
+
+test('outcome corrections cannot invalidate a replacement that is being scheduled or already linked', async () => {
+  for (const status of ['scheduling', 'scheduled']) {
+    const h = setup({ role: 'admin', overrides: { status: 'user_absent', rescheduleRequest: { id: 'request', status } } });
+    assert.equal((await h.invoke('recordSessionOutcome', { outcome: 'completed', reason: 'Attendance correction' })).code, 409);
+    assert.equal(h.updates.length, 0);
   }
 });
 

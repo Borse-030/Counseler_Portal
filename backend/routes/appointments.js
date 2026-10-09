@@ -1,3 +1,4 @@
+import { requestReschedule, reviewReschedule } from '../controllers/rescheduleController.js';
 import express from 'express';
 import {
   getAppointments,
@@ -31,6 +32,8 @@ const authenticate = (req, res, next) => {
 router.get('/', authenticate, getAppointments);
 router.get('/:id', authenticate, getAppointmentById);
 router.post('/', authenticate, createAppointment);
+router.post('/:id/reschedule-request', authenticate, requestReschedule);
+router.post('/:id/reschedule-review', authenticate, reviewReschedule);
 router.post('/:id/reschedule', authenticate, rescheduleAppointment);
 router.post('/:id/cancel', authenticate, cancelAppointment);
 router.put('/:id', authenticate, updateAppointment);

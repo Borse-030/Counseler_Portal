@@ -204,6 +204,7 @@ export const rescheduleAppointment = async (req, res) => {
     }
 
     if (apt.status === 'completed' || hasFeedback(apt)) return res.status(409).json({ message: 'Completed sessions keep their original record. Schedule a new session instead.' });
+    if (['user_absent', 'counselor_absent', 'both_absent'].includes(apt.status) || sessionEndTime(apt) <= Date.now()) return res.status(409).json({ message: 'Keep the missed session record. Use a rescheduling request to book a replacement.' });
     const rescheduleNoticeHours = 24;
     const aptDateTime = new Date(`${apt.date}T${apt.time}`);
     const now = new Date();
@@ -411,6 +412,7 @@ export const recordSessionOutcome = async (req, res) => {
     if (!Number.isFinite(sessionEndTime(apt)) || sessionEndTime(apt) > Date.now()) return res.status(409).json({ message: 'Confirm the outcome after the scheduled session end time (IST).' });
     if (!['upcoming', ...resolvedStatuses].includes(apt.status)) return res.status(409).json({ message: 'Only scheduled or resolved sessions can have an outcome.' });
     if (apt.status === outcome) return res.json({ message: 'This outcome is already recorded.', appointment: presentAppointment(apt, actor) });
+    if (['scheduling', 'scheduled'].includes(apt.rescheduleRequest?.status)) return res.status(409).json({ message: 'A replacement is being scheduled or already exists. Review the replacement session before changing this outcome.' });
     const correction = resolvedStatuses.includes(apt.status);
     if (correction && !isAdmin) return res.status(403).json({ message: 'Only an admin can correct a recorded outcome.' });
     if (correction && !reason.trim()) return res.status(400).json({ message: 'Explain why the recorded outcome needs correcting.' });
@@ -420,11 +422,15 @@ export const recordSessionOutcome = async (req, res) => {
     const requestFeedback = outcome === 'completed' && apt.appointmentKind !== 'discovery' && !apt.feedbackRequestedAt && !hasFeedback(apt);
     const fields = { status: outcome, outcomeRecordedAt: at, outcomeRecordedById: actor.id, outcomeRecordedByName: actor.name };
     if (requestFeedback) fields.feedbackRequestedAt = at;
-    const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, duration: apt.duration, outcomeRecordedAt: apt.outcomeRecordedAt || null }, {
+    const closeReschedule = outcome === 'completed' && apt.rescheduleRequest?.status === 'pending';
+    const requestHistory = closeReschedule ? { ...(apt.rescheduleRequest.toObject ? apt.rescheduleRequest.toObject() : apt.rescheduleRequest), status: 'declined', reviewerId: actor.id, reviewerName: actor.name, reviewedAt: at, response: 'The session was confirmed as completed; a replacement is not needed.' } : null;
+    if (closeReschedule) fields.rescheduleRequest = requestHistory;
+    const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, duration: apt.duration, outcomeRecordedAt: apt.outcomeRecordedAt || null, 'rescheduleRequest.id': apt.rescheduleRequest?.id || null, 'rescheduleRequest.status': { $eq: apt.rescheduleRequest?.status || null, $nin: ['scheduling', 'scheduled'] } }, {
       $set: fields,
-      $push: { outcomeHistory: { previousStatus: presented.status, outcome, actorId: actor.id, actorName: actor.name, actorRole: actor.role, reason: reason.trim(), at } },
+      $push: { outcomeHistory: { previousStatus: presented.status, outcome, actorId: actor.id, actorName: actor.name, actorRole: actor.role, reason: reason.trim(), at }, ...(closeReschedule ? { rescheduleHistory: requestHistory } : {}) },
     }, { new: true, runValidators: true });
     if (!updated) return res.status(409).json({ message: 'Another person recorded an outcome. Refresh this session.' });
+    if (closeReschedule) await sendNotification(apt.rescheduleRequest.requesterId, 'Your rescheduling request was closed because the session was confirmed as completed. Contact the admin if this outcome is incorrect.');
     if (requestFeedback) await sendNotification(apt.patientId, 'Your counseling session with ' + apt.counselorName + ' on ' + apt.date + ' is completed. Please share your feedback from your dashboard (Past journey).');
     if (apt.appointmentKind === 'discovery' && outcome === 'completed' && apt.careRequestId) {
       const request = await CareRequest.findOne({ id: apt.careRequestId, assignedCounselorId: apt.counselorId });

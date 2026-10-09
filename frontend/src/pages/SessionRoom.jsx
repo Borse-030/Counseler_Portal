@@ -1,3 +1,5 @@
+import ReschedulePanel from '../components/ReschedulePanel';
+import { mergeRescheduleResult } from '../utils/rescheduling';
 import SessionOutcomeDialog from '../components/SessionOutcomeDialog';
 import { feedbackLabel, hasFeedback, resolvedStatuses, sessionStatus, statusLabel } from '../utils/sessionOutcome';
 import useSessionClock from '../hooks/useSessionClock';
@@ -74,13 +76,14 @@ export default function SessionRoom({ currentUser }) {
           <Button disabled={busy} color="error" onClick={() => update({ status: 'cancelled' }, 'Call / session cancelled.')}>Cancel session</Button>
         </Stack>}
         {status === 'awaiting_outcome' && <Alert severity="warning">This session has ended and is awaiting attendance confirmation.{staff ? ' Confirm the outcome below.' : ' Your counselor will confirm the session outcome.'}</Alert>}
-        {staff && (status === 'awaiting_outcome' || (isAdmin && resolvedStatuses.includes(status))) && <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => setOutcomeOpen(true)}>{status === 'awaiting_outcome' ? 'Confirm session outcome' : 'Correct session outcome'}</Button>}
+        {staff && !['scheduling', 'scheduled'].includes(appointment.rescheduleRequest?.status) && (status === 'awaiting_outcome' || (isAdmin && resolvedStatuses.includes(status))) && <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => setOutcomeOpen(true)}>{status === 'awaiting_outcome' ? 'Confirm session outcome' : 'Correct session outcome'}</Button>}
         {staff && !!appointment.outcomeHistory?.length && <Box><Typography fontWeight={650}>Outcome history</Typography>{appointment.outcomeHistory.map((entry, i) => <Typography key={i} variant="body2" sx={{ mt: 1 }}>{statusLabel(entry.outcome)} · {entry.actorName} ({entry.actorRole}) · {new Date(entry.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}{entry.reason ? ' · ' + entry.reason : ''}</Typography>)}</Box>}
+        <ReschedulePanel allowRequest={!assigned || status !== 'awaiting_outcome'} appointment={{ ...appointment, status }} currentUser={currentUser} onUpdated={result => { setAppointment(result.appointment); setAppointments(previous => mergeRescheduleResult(previous, result)); setSuccess(result.message); }} />
         {!assigned && appointment.status === 'completed' && appointment.appointmentKind !== 'discovery' && <Box><Typography fontWeight={650}>{feedbackLabel(appointment)}</Typography>{hasFeedback(appointment) && <Typography variant="body2">{appointment.review.reviewText || 'No written feedback was provided.'} · {new Date(appointment.review.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</Typography>}</Box>}
         {!staff && appointment.status === 'completed' && !hasFeedback(appointment) && appointment.appointmentKind !== 'discovery' && <Alert severity="success">Please share your feedback from the Past journey tab on your dashboard.</Alert>}
       </>}
     </Stack></CardContent></Card>}
-    {outcomeOpen && appointment && <SessionOutcomeDialog appointment={{ ...appointment, status }} isAdmin={isAdmin} onClose={() => setOutcomeOpen(false)} onSaved={updated => { setAppointment(updated); setOutcomeOpen(false); setSuccess('Session outcome recorded.'); }} />}
+    {outcomeOpen && appointment && <SessionOutcomeDialog appointment={{ ...appointment, status }} isAdmin={isAdmin} onClose={() => setOutcomeOpen(false)} onSaved={(updated, message) => { setAppointment(updated); setOutcomeOpen(false); setSuccess(message); }} />}
     {staff && appointment?.careRequestId && <CareWorkflow currentUser={currentUser} requestId={appointment.careRequestId} />}
   </Stack></Container>;
 }

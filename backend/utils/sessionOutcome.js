@@ -13,5 +13,13 @@ export const presentAppointment = (appointment, actor) => {
   } else if (data.review) {
     data.review = { reviewText: data.review.reviewText || '', date: data.review.date };
   }
+  if (data.rescheduleRequest) {
+    data.rescheduleRequest = { ...data.rescheduleRequest };
+    delete data.rescheduleRequest.lockToken;
+    delete data.rescheduleRequest.leaseUntil;
+    delete data.rescheduleRequest.plannedDate;
+    delete data.rescheduleRequest.plannedTime;
+    delete data.rescheduleRequest.plannedMeetingLink;
+  }
   return { ...data, status: sessionStatus(data) };
 };
