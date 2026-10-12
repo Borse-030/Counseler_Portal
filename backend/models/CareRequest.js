@@ -27,8 +27,23 @@ const ReviewSchema = new mongoose.Schema({
   at: { type: Date, default: Date.now },
 }, { _id: false });
 
+const DiscoveryPlanSchema = new mongoose.Schema({
+  sessionType: { type: String, enum: ['single', 'package'], default: undefined },
+  sessionCount: { type: Number, min: 1, default: undefined, required() { return Boolean(this.sessionType); }, validate: {
+    validator(value) { return value === undefined || (Number.isSafeInteger(value) && (this.sessionType === 'single' ? value === 1 : this.sessionType !== 'package' || value >= 2)); },
+    message: 'The session count must be a whole number; packages require at least 2 sessions.',
+  } },
+  preferredDate: { type: String, default: '' },
+  preferredTime: { type: String, default: '' },
+  concerns: { type: [new mongoose.Schema({
+    clusterCode: { type: String, required: true },
+    subConcerns: { type: [String], default: [] },
+  }, { _id: false })], default: [] },
+}, { _id: false });
+
 const DiscoveryNoteSchema = new mongoose.Schema({
   notes: { type: String, default: '' },
+  discoveryPlan: { type: DiscoveryPlanSchema, default: undefined },
   actorId: { type: String, default: '' },
   actorName: { type: String, default: '' },
   at: { type: Date, default: Date.now },
@@ -70,6 +85,7 @@ const CareRequestSchema = new mongoose.Schema({
   finalCounselorName: { type: String, default: '' },
   discoveryAppointmentId: { type: String, default: '' },
   discoveryNotes: { type: String, default: '' },
+  discoveryPlan: { type: DiscoveryPlanSchema, default: undefined },
   discoveryNotesHistory: { type: [DiscoveryNoteSchema], default: [] },
   appointmentIds: { type: [String], default: [] },
   assignmentHistory: { type: [AssignmentHistorySchema], default: [] },

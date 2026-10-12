@@ -4,6 +4,7 @@ import { Appointment, AppointmentType, CareRequest, User } from '../models/index
 import { sendNotification } from '../utils/notificationService.js';
 
 import { createCareRequest } from '../utils/careRequestService.js';
+import { validateDiscoveryPlan } from '../../shared/counsellingFramework.mjs';
 const appointmentId = () => `apt_${crypto.randomUUID()}`;
 const patientRoles = ['patient', 'user'];
 
@@ -27,7 +28,7 @@ const addTimeline = (careRequest, status, actor, note = '') => {
   });
 };
 
-const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind, status = 'upcoming', purpose = '', duration: requestedDuration, meetingLink = '' }) => {
+const createAppointmentForRequest = async (careRequest, actor, { date, time, appointmentType, kind, status = 'upcoming', purpose = '', duration: requestedDuration, meetingLink = '' }, onPersist = () => {}) => {
   const appointmentCounselorId = kind === 'discovery' ? careRequest.assignedCounselorId : careRequest.finalCounselorId;
   const counselor = await User.findOne({ id: appointmentCounselorId, role: 'counselor', approved: true, suspended: { $ne: true } });
   if (!counselor) throw new Error('The assigned counselor is not active.');
@@ -59,6 +60,7 @@ const createAppointmentForRequest = async (careRequest, actor, { date, time, app
   });
 
   await appointment.save();
+  onPersist(appointment);
   careRequest.appointmentIds.push(id);
   if (kind === 'discovery') careRequest.discoveryAppointmentId = id;
   if (kind === 'session' && status === 'upcoming') addTimeline(careRequest, 'active', actor, `Session scheduled for ${date} at ${time}.`);
@@ -222,7 +224,7 @@ export const handleDecision = async (req, res) => {
 };
 
 export const updateDiscoveryNotes = async (req, res) => {
-  const { notes } = req.body;
+  const { notes, discoveryPlan } = req.body;
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
   if (typeof notes !== 'string' || notes.length > 10000) return res.status(400).json({ message: 'Discovery notes must be under 10,000 characters.' });
   if (!notes.trim()) return res.status(400).json({ message: 'Add observations before marking discovery complete.' });
@@ -234,9 +236,17 @@ export const updateDiscoveryNotes = async (req, res) => {
       return res.status(409).json({ message: 'Approve the registration before recording discovery observations.' });
     }
 
+    // Notes-only clients preserve any existing plan. New UI saves are validated
+    // against the same framework as the form before any persistence mutation.
+    if (discoveryPlan !== undefined) {
+      try { careRequest.discoveryPlan = validateDiscoveryPlan(discoveryPlan, careRequest.discoveryPlan); }
+      catch (error) { return res.status(400).json({ message: error.message }); }
+    }
     careRequest.discoveryNotes = notes.trim();
     if (!Array.isArray(careRequest.discoveryNotesHistory)) careRequest.discoveryNotesHistory = [];
-    careRequest.discoveryNotesHistory.push({ notes: notes.trim(), actorId: req.user.id, actorName: req.user.name, at: new Date() });
+    const planSnapshot = careRequest.discoveryPlan
+      ? JSON.parse(JSON.stringify(careRequest.discoveryPlan)) : undefined;
+    careRequest.discoveryNotesHistory.push({ notes: notes.trim(), discoveryPlan: planSnapshot, actorId: req.user.id, actorName: req.user.name, at: new Date() });
     const completedDiscovery = ['accepted', 'discovery_scheduled'].includes(careRequest.status) && Boolean(careRequest.discoveryNotes);
     const timelineStatus = completedDiscovery ? 'discovery_completed' : careRequest.status;
     if (completedDiscovery) careRequest.status = 'discovery_completed';
@@ -294,6 +304,7 @@ export const assignFinalCounselor = async (req, res) => {
 };
 
 export const scheduleSession = async (req, res) => {
+  const savedAppointments = [];
   const { sessions: submittedSessions, date, time, appointmentType = 'Video Consultation', purpose = '', kind = 'session' } = req.body;
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Only an admin can schedule sessions or follow-ups.' });
 
@@ -306,9 +317,11 @@ export const scheduleSession = async (req, res) => {
 
     const proposed = Array.isArray(submittedSessions) ? submittedSessions : [{ date, time, appointmentType, purpose, kind }];
     if (!proposed.length || proposed.length > 12) return res.status(400).json({ message: 'Propose between one and twelve sessions at a time.' });
+    if (proposed.some(item => !item || typeof item !== 'object' || Array.isArray(item))) return res.status(400).json({ message: 'Each proposed session must contain date, time, and meeting details.' });
     const normalized = proposed.map(item => ({
       ...item,
       appointmentType: item.appointmentType || 'Video Consultation',
+      duration: Number(item.duration ?? 60),
       kind: item.kind === 'follow_up' ? 'follow_up' : 'session',
     }));
     const requestedMode = careRequest.preferredFormat === 'In-Person Consultation' ? 'offline'
@@ -348,17 +361,28 @@ export const scheduleSession = async (req, res) => {
       if (overlaps) return res.status(400).json({ message: 'Proposed sessions cannot overlap on the same date.' });
     }
 
-    const appointments = [];
     for (const item of normalized) {
-      appointments.push(await createAppointmentForRequest(careRequest, req.user, {
+      await createAppointmentForRequest(careRequest, req.user, {
         ...item,
         kind: item.kind,
         status: 'upcoming',
-      }));
+      }, appointment => savedAppointments.push(appointment));
     }
-    await sendNotification(careRequest.patientId, `${appointments.length} counseling session(s) have been scheduled.`);
-    res.status(201).json({ message: 'Session(s) scheduled.', appointments, request: careRequest });
+    await sendNotification(careRequest.patientId, `${savedAppointments.length} counseling session(s) have been scheduled.`);
+    res.status(201).json({ message: 'Session(s) scheduled.', appointments: savedAppointments, request: careRequest });
   } catch (error) {
+    if (savedAppointments.length) {
+      // Standalone MongoDB cannot roll back a batch. Report persisted items so
+      // callers retry only the remaining proposals instead of duplicating them.
+      let request;
+      try {
+        request = await CareRequest.findOneAndUpdate({ id: req.params.id }, {
+          $addToSet: { appointmentIds: { $each: savedAppointments.map(item => item.id) } },
+          $set: { status: 'active' },
+        }, { new: true });
+      } catch { /* The persisted appointments remain linked through careRequestId. */ }
+      return res.status(500).json({ message: `${savedAppointments.length} session(s) saved before scheduling stopped. Review those bookings and retry only the remaining sessions.`, appointments: savedAppointments, request });
+    }
     res.status(500).json({ message: error.message });
   }
 };

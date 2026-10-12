@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, MenuItem, Paper, Radio, RadioGroup, Skeleton, Stack, Tab, Tabs, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import AddIcon from '@mui/icons-material/Add';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import TranslateOutlinedIcon from '@mui/icons-material/TranslateOutlined';
 import { api } from '../api';
+import DiscoveryPlanSummary from './DiscoveryPlanSummary';
+import { sessionsOverlap } from '../utils/sessionScheduling';
 import { slotSupportsMode } from '../utils/sessionMode';
 import { isOnlineMeetingLink } from '../utils/sessionAttendance';
 import { counselorLanguages, getCounselorMatch, sortCounselorMatches } from '../utils/counselorMatching';
@@ -14,7 +18,7 @@ import { counselorLanguages, getCounselorMatch, sortCounselorMatches } from '../
 const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 const initials = name => (name || '?').split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('');
 
-export default function AdminScheduleSession({ request, patient, counselors, onClose, onScheduled, onAssigned }) {
+export default function AdminScheduleSession({ request, patient, counselors, appointments = [], onClose, onScheduled, onAssigned, onPartiallyScheduled }) {
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down('md'));
   const preference = request.preferredFormat || request.appointmentType || patient?.preferredCounselingMode || request.supportType;
@@ -23,7 +27,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
   const requestedType = requestedMode === 'offline' ? 'In-Person Consultation' : requestedMode === 'online' ? 'Video Consultation' : '';
   const preferredLanguage = request.preferredLanguage || patient?.preferredLanguage || '';
   const modeLabel = requestedMode === 'offline' ? 'Offline · HO' : requestedMode === 'online' ? 'Online' : 'Mode not specified';
-  const [date, setDate] = useState(todayIST);
+  const [date, setDate] = useState(() => request.discoveryPlan?.preferredDate >= todayIST() ? request.discoveryPlan.preferredDate : todayIST());
   const [duration, setDuration] = useState(60);
   const [counselorId, setCounselorId] = useState(request.finalCounselorId || '');
   const [time, setTime] = useState('');
@@ -36,6 +40,8 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
   const [slotRefresh, setSlotRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [queuedSessions, setQueuedSessions] = useState([]);
+  const [editingQueuedIndex, setEditingQueuedIndex] = useState(null);
   const assignedId = useRef(request.finalCounselorId || '');
   const saving = useRef(false);
   const listRef = useRef(null);
@@ -86,11 +92,23 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
     && [c.name, c.specialty, ...c.match.languages].some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase())));
   const ready = availability?.key === availabilityKey;
   const day = ready ? availability.data : null;
-  const slots = (day?.slots || []).filter(slot => slot.available && slotSupportsMode(slot, requestedType));
+  const slots = (day?.slots || []).filter(slot => slot.available && slotSupportsMode(slot, requestedType)
+    && !queuedSessions.some((item, index) => index !== editingQueuedIndex && sessionsOverlap(item, { date, time: slot.time, duration }))
+    && !appointments.some(item => item.patientId === request.patientId && ['upcoming', 'pending_admin'].includes(item.status) && sessionsOverlap(item, { date, time: slot.time, duration })));
   const validTime = slots.some(slot => slot.time === time);
   const validLink = requestedMode === 'offline' || isOnlineMeetingLink(meetingLink);
-  const canSubmit = Boolean(selected && requestedType && validDate && validTime && validLink && !busy);
-  const chooseCounselor = id => { setCounselorId(id); setTime(''); setError(''); };
+  const canAdd = Boolean(selected && requestedType && validDate && validTime && validLink && !busy);
+  const canSubmit = !busy && editingQueuedIndex === null && Boolean(selected && requestedType && (queuedSessions.length || canAdd));
+  const candidate = { date, time, duration, appointmentType: requestedType, kind: 'session', meetingLink: requestedMode === 'online' ? meetingLink.trim() : '' };
+  const chooseCounselor = id => {
+    if (queuedSessions.length && id !== counselorId) { setError('Remove the sessions in the list before choosing a different counselor.'); return; }
+    setCounselorId(id); setTime(''); setError('');
+  };
+  const addSession = () => {
+    if (!canAdd || (queuedSessions.length >= 12 && editingQueuedIndex === null)) return;
+    setQueuedSessions(previous => editingQueuedIndex === null ? [...previous, candidate] : previous.map((item, index) => index === editingQueuedIndex ? candidate : item));
+    setEditingQueuedIndex(null); setTime(''); setError('');
+  };
 
   const submit = async () => {
     if (!canSubmit || saving.current) return;
@@ -104,11 +122,20 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
         onAssigned?.(result.request);
       }
       const result = await api.scheduleRequestSession(request.id, {
-        sessions: [{ date, time, duration, appointmentType: requestedType, kind: 'session', meetingLink: requestedMode === 'online' ? meetingLink.trim() : '' }],
+        sessions: queuedSessions.length ? queuedSessions : [candidate],
       });
       sessionSaved = true;
+      setQueuedSessions([]); setTime(''); setSlotRefresh(value => value + 1);
       await onScheduled(result);
     } catch (err) {
+      if (err.details?.appointments?.length) {
+        const saved = err.details.appointments;
+        setQueuedSessions(previous => previous.filter(item => !saved.some(appointment => appointment.date === item.date && appointment.time === item.time)));
+        onPartiallyScheduled?.(err.details);
+        if (err.details.request) onAssigned?.(err.details.request);
+        setError(err.message); setTime(''); setSlotRefresh(value => value + 1);
+        return;
+      }
       setError(`${sessionSaved ? 'The session was saved, but the dashboard could not refresh. ' : assignedId.current === counselorId ? 'Counselor assignment is saved. The session was not scheduled. ' : ''}${err.message || 'Unable to schedule the session.'}`);
       setTime('');
       if (!sessionSaved) setSlotRefresh(value => value + 1);
@@ -133,6 +160,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
           <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap' }}>
             <Chip size="small" icon={requestedMode === 'offline' ? <PlaceOutlinedIcon /> : <VideocamOutlinedIcon />} label={modeLabel} color="primary" variant="outlined" />
             <Chip size="small" icon={<TranslateOutlinedIcon />} label={preferredLanguage || 'No language preference'} variant="outlined" />
+            {request.discoveryPlan?.sessionType && <Chip size="small" variant="outlined" label={request.discoveryPlan.sessionType === 'package' ? `Package · ${request.discoveryPlan.sessionCount} sessions` : 'Single session'} />}
           </Stack>
         </Stack>
         <Box component="details" sx={{ mt: 0.75 }}>
@@ -140,6 +168,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
           <Box sx={{ mt: 1, p: 1.5, bgcolor: 'action.hover', borderRadius: 1, maxHeight: 140, overflow: 'auto' }}>
             <Typography variant="caption" color="text.secondary">User concern</Typography><Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>{patient?.counselingRequirements || request.intakeNotes || 'Not provided'}</Typography>
             <Typography variant="caption" color="text.secondary">Discovery notes</Typography><Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{request.discoveryNotes || 'Not provided'}</Typography>
+            <DiscoveryPlanSummary plan={request.discoveryPlan} />
           </Box>
         </Box>
       </Box>
@@ -191,6 +220,16 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
         </Stack>
         <Stack spacing={1.75} sx={{ p: 2, bgcolor: 'action.hover', borderLeft: { md: 1 }, borderTop: { xs: 1, md: 0 }, borderColor: 'divider', overflowY: { md: 'auto' }, minHeight: 0, '& > *': { flexShrink: 0 } }}>
           <Box><Typography variant="subtitle1" fontWeight={700}>2. Schedule the session</Typography><Typography variant="caption" color="text.secondary">Times are shown in India Standard Time (IST).</Typography></Box>
+          {!!queuedSessions.length && <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700}>Sessions to schedule ({queuedSessions.length}/12)</Typography>
+            <Typography variant="caption" color="text.secondary">Only sessions in this list will be booked. Add each date and time below.</Typography>
+            <Stack spacing={1} sx={{ mt: 1 }}>{queuedSessions.map((item, index) => <Box key={`${item.date}-${item.time}`} sx={{ display: 'flex', alignItems: 'center', gap: .5 }}>
+              <Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={650}>{index + 1}. {item.date} · {item.time} IST</Typography><Typography variant="caption" color="text.secondary">{item.duration} min · {item.appointmentType}</Typography></Box>
+              <IconButton size="small" disabled={busy} aria-label={`Edit queued session ${index + 1}`} onClick={() => { setDate(item.date); setTime(item.time); setDuration(item.duration); setMeetingLink(item.meetingLink); setEditingQueuedIndex(index); }}><EditOutlinedIcon fontSize="small" /></IconButton>
+              <IconButton size="small" disabled={busy} aria-label={`Remove queued session ${index + 1}`} onClick={() => { setQueuedSessions(previous => previous.filter((_, i) => i !== index)); setEditingQueuedIndex(previous => previous === index ? null : previous !== null && previous > index ? previous - 1 : previous); }}><CloseIcon fontSize="small" /></IconButton>
+            </Box>)}</Stack>
+          </Paper>}
+          {request.discoveryPlan?.preferredDate && <Alert severity="info" sx={{ fontSize: 12 }}>Preferred session: {request.discoveryPlan.preferredDate} at {request.discoveryPlan.preferredTime} IST. Choose an available time below to confirm the booking.</Alert>}
           {!selected ? <Paper variant="outlined" sx={{ p: 2.5, textAlign: 'center', borderStyle: 'dashed', borderRadius: 1.5 }}><Typography variant="body2" color="text.secondary">Select a counselor to check available times and complete the booking.</Typography></Paper> : <>
             <Box><Typography variant="caption" color="text.secondary">Selected counselor</Typography><Typography variant="body2" fontWeight={700}>{selected.name}</Typography></Box>
             {selected.match.languageMatch === false && <Alert severity="warning" sx={{ fontSize: 12 }}>This counselor does not list {preferredLanguage}. Confirm language suitability before scheduling.</Alert>}
@@ -217,6 +256,8 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
             error={Boolean(meetingLink) && !isOnlineMeetingLink(meetingLink)} placeholder="https://meet.google.com/…"
             helperText={meetingLink && !isOnlineMeetingLink(meetingLink) ? 'Enter a valid HTTPS Zoom or Google Meet link.' : 'Required for the counselor and user to attend.'}
             onChange={e => setMeetingLink(e.target.value)} /> : requestedMode === 'offline' && <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, display: 'flex', gap: 1 }}><PlaceOutlinedIcon color="primary" fontSize="small" /><Box><Typography variant="body2" fontWeight={600}>HO</Typography><Typography variant="caption" color="text.secondary">The counselor and user attend in person.</Typography></Box></Paper>}
+          <Button startIcon={<AddIcon />} variant="outlined" disabled={!canAdd || (queuedSessions.length >= 12 && editingQueuedIndex === null)} onClick={addSession}>{editingQueuedIndex === null ? 'Add session to list' : 'Update session in list'}</Button>
+          <Typography variant="caption" color="text.secondary">Add up to 12 sessions, then book them together.</Typography>
         </Stack>
       </Box>
     </DialogContent>
@@ -224,7 +265,7 @@ export default function AdminScheduleSession({ request, patient, counselors, onC
       <Box sx={{ flex: '1 1 200px' }}><Typography variant="body2" fontWeight={600}>{selected?.name || 'No counselor selected'}</Typography>
         <Typography variant="caption" color="text.secondary">{validTime ? `${date} · ${time} IST · ${duration} min · ${modeLabel}` : 'Choose a counselor and an available time to continue.'}</Typography></Box>
       <Stack direction="row" spacing={1}><Button disabled={busy} onClick={onClose}>Cancel</Button><Button variant="contained" disabled={!canSubmit} onClick={submit}
-        startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>{busy ? 'Saving…' : 'Assign and schedule'}</Button></Stack>
+        startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>{busy ? 'Saving…' : queuedSessions.length ? `Schedule ${queuedSessions.length} sessions` : 'Assign and schedule'}</Button></Stack>
     </DialogActions>
   </Dialog>;
 }

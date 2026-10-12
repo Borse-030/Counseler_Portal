@@ -179,6 +179,36 @@ export const createAppointment = async (req, res) => {
   }
 };
 
+export const editAppointmentSchedule = async (req, res) => {
+  try {
+    const actor = await User.findOne({ id: req.userId, suspended: { $ne: true } });
+    if (actor?.role !== 'admin') return res.status(403).json({ message: 'Only admins can edit scheduled sessions.' });
+    const apt = await Appointment.findOne({ id: req.params.id });
+    if (!apt) return res.status(404).json({ message: 'Appointment not found.' });
+    if (req.body.expectedUpdatedAt && new Date(req.body.expectedUpdatedAt).getTime() !== new Date(apt.updatedAt).getTime()) return res.status(409).json({ message: 'This session changed while you were editing. Reload and try again.' });
+    const start = new Date(`${apt.date}T${apt.time}:00+05:30`).getTime();
+    if (apt.status !== 'upcoming' || !Number.isFinite(start) || start <= Date.now() || hasFeedback(apt)) return res.status(409).json({ message: 'Only future scheduled sessions can be edited. Keep resolved sessions in history.' });
+    const { date, time, duration, appointmentType, meetingLink = '' } = req.body;
+    if (!['Video Consultation', 'Online Consultation', 'In-Person Consultation'].includes(appointmentType)) return res.status(400).json({ message: 'Choose online or in-person consultation.' });
+    if (typeof meetingLink !== 'string' || (appointmentType !== 'In-Person Consultation' && !validOnlineMeetingLink(meetingLink))) return res.status(400).json({ message: 'Use a valid HTTPS Zoom or Google Meet link for online sessions.' });
+    if (!Number.isInteger(duration)) return res.status(400).json({ message: 'Choose a whole-number session duration.' });
+    const scheduleError = await validateSchedule(apt.counselorId, date, time, duration, apt.id, apt.patientId, appointmentType);
+    if (scheduleError) return res.status(400).json({ message: scheduleError });
+    const next = { date, time, duration, appointmentType: appointmentType === 'Online Consultation' ? 'Video Consultation' : appointmentType, meetingLink: appointmentType === 'In-Person Consultation' ? '' : meetingLink.trim(), clinicAddress: appointmentType === 'In-Person Consultation' ? 'HO' : '' };
+    const previous = { date: apt.date, time: apt.time, duration: apt.duration, appointmentType: apt.appointmentType, meetingLink: apt.meetingLink || '' };
+    const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: 'upcoming', updatedAt: apt.updatedAt, date: apt.date, time: apt.time }, {
+      $set: next, $push: { scheduleHistory: { previous, next, actorId: actor.id, actorName: actor.name, at: new Date() } },
+    }, { new: true });
+    if (!updated) return res.status(409).json({ message: 'This session changed while you were editing. Reload and try again.' });
+    await logAction(actor.id, `Edited scheduled appointment ${apt.id}`, req);
+    await Promise.allSettled([
+      sendNotification(apt.patientId, `Your session with ${apt.counselorName} is now scheduled for ${date} at ${time} IST. Review the updated session details in your dashboard.`),
+      sendNotification(apt.counselorId, `Session update for ${apt.patientName}: ${date} at ${time} IST. Review the updated session details in your dashboard.`),
+    ]);
+    res.json({ message: 'Session updated.', appointment: presentAppointment(updated, actor) });
+  } catch { res.status(500).json({ message: 'Unable to update this session.' }); }
+};
+
 export const rescheduleAppointment = async (req, res) => {
   const { date, time } = req.body;
   if (!date || !time) {

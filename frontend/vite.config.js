@@ -17,6 +17,7 @@ export default defineConfig({
     : 'node_modules/.vite',
   plugins: [react()],
   server: {
+    fs: { allow: [projectPath, fileURLToPath(new URL('../shared', import.meta.url))] },
     port: 4000,
     strictPort: true
   }

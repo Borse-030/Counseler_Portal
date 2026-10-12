@@ -1,5 +1,6 @@
 import { validateSchedule } from '../utils/scheduling.js';
 import { appointmentMode, dayIntervals, modesAtTime, toMinutes, validDate, validateDayConfigs } from '../utils/availabilityModes.js';
+import { getUserIdFromToken } from '../utils/security.js';
 import { User, Availability, Appointment, AppointmentType, Exception, AuditLog } from '../models/index.js';
 
 const logAction = async (userId, action, req) => {
@@ -226,6 +227,18 @@ export const getSlots = async (req, res) => {
   if (!validDate(date) || !Number.isInteger(duration) || duration < 10 || duration > 180) return res.status(400).json({ message: 'Choose a valid date and a duration from 10 to 180 minutes.' });
   try {
     const counselorId = req.params.id;
+    let excludeId = '';
+    let patientId = '';
+    if (req.query.excludeId) {
+      const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : '';
+      let userId;
+      try { userId = getUserIdFromToken(token); } catch { return res.status(401).json({ message: 'Invalid token' }); }
+      const actor = await User.findOne({ id: userId, role: 'admin', suspended: { $ne: true } });
+      if (!actor) return res.status(403).json({ message: 'Only admins can check availability for an edited session.' });
+      const existing = await Appointment.findOne({ id: req.query.excludeId, counselorId, status: 'upcoming' });
+      if (!existing) return res.status(404).json({ message: 'Scheduled session not found.' });
+      excludeId = existing.id; patientId = existing.patientId;
+    }
     const availability = await Availability.findOne({ counselorId }) || { workingDays: [1, 2, 3, 4, 5], startHour: '09:00', endHour: '17:00' };
     const intervals = dayIntervals(availability, date);
     const step = duration;
@@ -238,7 +251,7 @@ export const getSlots = async (req, res) => {
       }
     }
     const slots = await Promise.all([...times].sort().map(async time => {
-      const reason = await validateSchedule(counselorId, date, time, duration, '', '', appointmentType);
+      const reason = await validateSchedule(counselorId, date, time, duration, excludeId, patientId, appointmentType);
       return { time, modes: modesAtTime(intervals, time, duration, step), available: !reason, reason };
     }));
     let message = '';

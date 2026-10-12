@@ -1,6 +1,10 @@
 import { mergeRescheduleResult, pendingReschedule } from '../utils/rescheduling';
 import { hasFeedback } from '../utils/sessionOutcome';
 import AdminScheduleSession from '../components/AdminScheduleSession';
+import DiscoveryCallEditor from '../components/DiscoveryCallEditor';
+import DiscoveryPlanSummary from '../components/DiscoveryPlanSummary';
+import EditScheduledSession from '../components/EditScheduledSession';
+import { canEditScheduledSession } from '../utils/sessionScheduling';
 import SessionOverview from '../components/SessionOverview';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
@@ -108,9 +112,9 @@ export default function AdminDashboard({ currentUser }) {
   const [decisionReason, setDecisionReason] = useState('');
   const [decisionBusy, setDecisionBusy] = useState(false);
   const [selectedCase, setSelectedCase] = useState(null);
-  const [discoveryDraft, setDiscoveryDraft] = useState('');
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
 
   // User search/filter
   const [userQuery, setUserQuery] = useState('');
@@ -292,7 +296,6 @@ export default function AdminDashboard({ currentUser }) {
 
   const openCase = (user, request, { schedule = false } = {}) => {
     setSelectedCase({ user, request });
-    setDiscoveryDraft(request.discoveryNotes || '');
     setScheduleOpen(schedule);
   };
 
@@ -305,15 +308,16 @@ export default function AdminDashboard({ currentUser }) {
     ['discovery_completed', 'matched', 'active', 'closed'].includes(currentCaseRequest.status) || currentCaseRequest.discoveryNotes
   ));
 
-  const saveDiscovery = async () => {
-    if (!currentCaseRequest || !discoveryDraft.trim()) return;
+  const saveDiscovery = async (notes, discoveryPlan) => {
+    if (!currentCaseRequest) throw new Error('Open a case before saving discovery details.');
+    const requestId = currentCaseRequest.id;
     try {
       setDiscoveryBusy(true);
-      const result = await api.saveDiscoveryNotes(currentCaseRequest.id, discoveryDraft);
-      setSelectedCase(previous => previous ? { ...previous, request: result.request } : previous);
-      setSuccess('Discovery notes saved. Discovery is marked complete.');
-      await fetchAdminData();
-    } catch (err) { setError(err.message || 'Unable to save discovery notes.'); }
+      const result = await api.saveDiscoveryNotes(requestId, notes, discoveryPlan);
+      setSelectedCase(previous => previous?.request.id === requestId ? { ...previous, request: result.request } : previous);
+      setCareRequests(previous => previous.map(request => request.id === requestId ? result.request : request));
+      setSuccess('Discovery notes, proposed session, and concerns saved.');
+    } catch (err) { setError(err.message || 'Unable to save discovery details.'); throw err; }
     finally { setDiscoveryBusy(false); }
   };
 
@@ -372,7 +376,7 @@ export default function AdminDashboard({ currentUser }) {
       </Box>
 
       <Box id="admin-directory" role="tabpanel" aria-labelledby={`admin-tab-${activeTab}`}>
-        {activeTab === 5 && <SessionOverview appointments={appointments} currentUser={currentUser} onUpdated={result => setAppointments(previous => mergeRescheduleResult(previous, result))} />}
+        {activeTab === 5 && <SessionOverview appointments={appointments} onEdit={setEditingAppointment} currentUser={currentUser} onUpdated={result => setAppointments(previous => mergeRescheduleResult(previous, result))} />}
         <Alert severity="info" sx={{ display: activeTab === 5 ? 'none' : 'flex', mb: 2, border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5, fontSize: 12 }}>
           {activeTab === 0 ? 'Review new applications first. Approved users move to discovery before counselor assignment.' : activeTab === 1 ? 'Open a case to review discovery notes, then match a counselor and schedule a session.' : activeTab === 2 ? 'Review your active counseling panel, current assignments, and completed sessions.' : activeTab === 3 ? 'Record discovery observations and match each approved user with the right counselor.' : 'Review deactivated accounts and reactivate them when they are ready to return.'}
         </Alert>
@@ -438,11 +442,11 @@ export default function AdminDashboard({ currentUser }) {
             <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Discovery call</Typography>
               <Alert severity={discoveryIsComplete ? 'success' : 'warning'} sx={{ mb: 1.5 }}>{discoveryIsComplete ? 'Completed' : 'Pending'}{discoveryIsComplete && (currentCaseRequest.discoveryNotesHistory?.length || currentCaseRequest.timeline?.length) ? ` · ${new Date(currentCaseRequest.discoveryNotesHistory?.at(-1)?.at || [...(currentCaseRequest.timeline || [])].reverse().find(event => event.status === 'discovery_completed')?.at || currentCaseRequest.updatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}</Alert>
               {['accepted', 'discovery_scheduled', 'discovery_completed', 'matched', 'active'].includes(currentCaseRequest.status) && <>
-                <TextField fullWidth multiline minRows={4} label="Discovery notes" value={discoveryDraft} onChange={event => setDiscoveryDraft(event.target.value)} />
-                <Button sx={{ mt: 1 }} variant="contained" disabled={discoveryBusy || !discoveryDraft.trim()} onClick={saveDiscovery}>{discoveryIsComplete ? 'Save discovery notes' : 'Save notes and mark completed'}</Button>
+                <DiscoveryCallEditor key={currentCaseRequest.id} request={currentCaseRequest} busy={discoveryBusy} completed={discoveryIsComplete} onSave={saveDiscovery} />
               </>}
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 2, mb: 1 }}>Discovery note history</Typography>
-              {currentCaseRequest.discoveryNotesHistory?.length ? <Stack spacing={1}>{[...currentCaseRequest.discoveryNotesHistory].reverse().map((entry, index) => <Paper key={`${entry.at}-${index}`} variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">{new Date(entry.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {entry.actorName || 'Admin'}</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{entry.notes}</Typography></Paper>)}</Stack> : currentCaseRequest.discoveryNotes ? <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">Current saved notes</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{currentCaseRequest.discoveryNotes}</Typography></Paper> : <Typography variant="body2" color="text.secondary">No discovery notes recorded yet.</Typography>}
+              <DiscoveryPlanSummary plan={currentCaseRequest.discoveryPlan} />
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 2, mb: 1 }}>Discovery history</Typography>
+              {currentCaseRequest.discoveryNotesHistory?.length ? <Stack spacing={1}>{[...currentCaseRequest.discoveryNotesHistory].reverse().map((entry, index) => <Paper key={`${entry.at}-${index}`} variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">{new Date(entry.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {entry.actorName || 'Admin'}</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{entry.notes}</Typography><DiscoveryPlanSummary plan={entry.discoveryPlan} /></Paper>)}</Stack> : currentCaseRequest.discoveryNotes ? <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">Current saved notes</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{currentCaseRequest.discoveryNotes}</Typography></Paper> : <Typography variant="body2" color="text.secondary">No discovery notes recorded yet.</Typography>}
             </Box>
 
           {currentCaseRequest.status === 'discovery_completed' && !currentCaseRequest.finalCounselorId && <Box>
@@ -453,13 +457,14 @@ export default function AdminDashboard({ currentUser }) {
             {currentCaseRequest.finalCounselorId && ['matched', 'active'].includes(currentCaseRequest.status) && <Box>
               <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assigned counselor</Typography>
               <Typography variant="body2" color="text.secondary">{assignedCounselor?.name || currentCaseRequest.finalCounselorName || 'Counselor assigned'}</Typography>
-              {scheduledCaseSession ? <Alert severity="success" sx={{ mt: 1 }}>Session booked for {shortDate(scheduledCaseSession.date)} at {scheduledCaseSession.time} IST · {scheduledCaseSession.appointmentType || 'Consultation'}</Alert> : <Button sx={{ mt: 1 }} variant="contained" onClick={() => setScheduleOpen(true)}>Schedule session with counselor</Button>}
+              <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Button variant="contained" onClick={() => setScheduleOpen(true)}>{scheduledCaseSession ? 'Schedule more sessions' : 'Schedule session with counselor'}</Button>{canEditScheduledSession(scheduledCaseSession) && <Button variant="outlined" onClick={() => setEditingAppointment(scheduledCaseSession)}>Edit next session</Button>}</Stack>
+              {scheduledCaseSession && <Alert severity="success" sx={{ mt: 1 }}>Session booked for {shortDate(scheduledCaseSession.date)} at {scheduledCaseSession.time} IST · {scheduledCaseSession.appointmentType || 'Consultation'}</Alert>}
             </Box>}
 
           <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
             {!!currentCaseRequest.reviews?.length && <Stack spacing={1} sx={{ mb: 1.5 }}>{currentCaseRequest.reviews.map((review, index) => <Paper key={`${review.at}-${index}`} variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">Registration {review.decision === 'accepted' ? 'approved' : 'rejected'} · {new Date(review.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {review.actorName}</Typography>{review.reason && <Typography variant="body2">{review.reason}</Typography>}</Paper>)}</Stack>}
             {!!currentCaseRequest.timeline?.length && <Box component="details" sx={{ mb: 1.5 }}><Typography component="summary" variant="body2" fontWeight={650} sx={{ cursor: 'pointer', mb: 1 }}>Care timeline ({currentCaseRequest.timeline.length})</Typography>{[...currentCaseRequest.timeline].reverse().map((event, index) => <Typography key={`${event.at}-${index}`} variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>{new Date(event.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {event.actorName}: {event.note}</Typography>)}</Box>}
-            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{hasFeedback(appointment) && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
+            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{canEditScheduledSession(appointment) && <Button size="small" sx={{ mt: 1 }} onClick={() => setEditingAppointment(appointment)}>Edit session</Button>}{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{hasFeedback(appointment) && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
           </Box>
           </Stack>
         </Stack>}
@@ -469,6 +474,11 @@ export default function AdminDashboard({ currentUser }) {
         key={currentCaseRequest.id}
         request={currentCaseRequest}
         patient={selectedCase.user}
+        appointments={appointments}
+        onPartiallyScheduled={result => setAppointments(previous => {
+          const savedIds = new Set(result.appointments.map(item => item.id));
+          return [...previous.filter(item => !savedIds.has(item.id)), ...result.appointments];
+        })}
         counselors={users.filter(user => user.role === 'counselor' && user.approved && !user.suspended)}
         onClose={() => { setScheduleOpen(false); setSelectedCase(null); }}
         onAssigned={request => {
@@ -482,6 +492,11 @@ export default function AdminDashboard({ currentUser }) {
           await fetchAdminData();
         }}
       />}
+
+      {editingAppointment && <EditScheduledSession key={editingAppointment.id} appointment={editingAppointment} onClose={() => setEditingAppointment(null)} onSaved={result => {
+        setAppointments(previous => previous.map(item => item.id === result.appointment.id ? result.appointment : item));
+        setEditingAppointment(null); setSuccess(result.message || 'Session updated.');
+      }} />}
 
       <Dialog open={Boolean(decisionRequest)} onClose={() => !decisionBusy && setDecisionRequest(null)} fullWidth maxWidth="sm">
         <DialogTitle>Reject registration request</DialogTitle>

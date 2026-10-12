@@ -5,6 +5,7 @@ import {
   getAppointmentById,
   createAppointment,
   rescheduleAppointment,
+  editAppointmentSchedule,
   cancelAppointment,
   updateAppointment,
   submitReview,
@@ -37,6 +38,7 @@ router.post('/:id/reschedule-review', authenticate, reviewReschedule);
 router.post('/:id/reschedule', authenticate, rescheduleAppointment);
 router.post('/:id/cancel', authenticate, cancelAppointment);
 router.put('/:id', authenticate, updateAppointment);
+router.put('/:id/schedule', authenticate, editAppointmentSchedule);
 router.post('/:id/outcome', authenticate, recordSessionOutcome);
 router.post('/:id/review', authenticate, submitReview);
 

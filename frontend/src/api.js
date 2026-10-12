@@ -52,7 +52,9 @@ const request = async (endpoint, options = {}) => {
       api.logout();
       window.dispatchEvent(new CustomEvent('auth-invalid-token'));
     }
-    throw new Error(data.message || 'Something went wrong');
+    const error = new Error(data.message || 'Something went wrong');
+    error.details = data;
+    throw error;
   }
 
   return data;
@@ -217,9 +219,10 @@ export const api = {
     });
   },
 
-  getCounselorSlots: async (id, date, duration = 60, appointmentType = '') => {
+  getCounselorSlots: async (id, date, duration = 60, appointmentType = '', excludeId = '') => {
     const params = new URLSearchParams({ date, duration: String(duration) });
     if (appointmentType) params.set('appointmentType', appointmentType);
+    if (excludeId) params.set('excludeId', excludeId);
     return request(`/counselors/${id}/slots?${params}`);
   },
 
@@ -228,6 +231,9 @@ export const api = {
   deleteCounselorException: id => request(`/counselors/exceptions/${id}`, { method: 'DELETE' }),
 
   // Appointments API
+  editAppointmentSchedule: (id, schedule) => request(`/appointments/${id}/schedule`, {
+    method: 'PUT', body: JSON.stringify(schedule),
+  }),
   getAppointments: async () => {
     return request('/appointments');
   },
@@ -262,9 +268,9 @@ export const api = {
     body: JSON.stringify(decision),
   }),
 
-  saveDiscoveryNotes: async (id, notes) => request(`/session-requests/${id}/discovery-notes`, {
+  saveDiscoveryNotes: async (id, notes, discoveryPlan) => request(`/session-requests/${id}/discovery-notes`, {
     method: 'PUT',
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify({ notes, discoveryPlan }),
   }),
 
   assignFinalCounselor: async (id, assignment) => request(`/session-requests/${id}/final-assignment`, {

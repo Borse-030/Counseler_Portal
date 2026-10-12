@@ -1,12 +1,13 @@
 import ReschedulePanel from './ReschedulePanel';
 import { pendingReschedule } from '../utils/rescheduling';
+import { canEditScheduledSession } from '../utils/sessionScheduling';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import useSessionClock from '../hooks/useSessionClock';
 import { feedbackEligible, feedbackLabel, hasFeedback, sessionStatus, statusLabel } from '../utils/sessionOutcome';
 
-export default function SessionOverview({ appointments, currentUser, onUpdated }) {
+export default function SessionOverview({ appointments, currentUser, onUpdated, onEdit }) {
   const now = useSessionClock();
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -36,7 +37,7 @@ export default function SessionOverview({ appointments, currentUser, onUpdated }
         <TableCell>{a.date} · {a.time}<Typography variant="caption" display="block">{a.duration || 60} min · {a.appointmentType === 'In-Person Consultation' ? 'Offline · HO' : 'Online'}</Typography></TableCell>
         <TableCell><Chip size="small" label={statusLabel(sessionStatus(a, now))} color={a.status === 'completed' ? 'success' : sessionStatus(a, now) === 'awaiting_outcome' ? 'warning' : 'default'} variant="outlined" />{a.outcomeRecordedByName && <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>Recorded by {a.outcomeRecordedByName}</Typography>}</TableCell>
         <TableCell sx={{ maxWidth: 320 }}><Typography variant="body2">{feedbackLabel(a)}</Typography>{feedbackEligible(a) && hasFeedback(a) && <Box><Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.review.reviewText || 'No written feedback was provided.'}</Typography><Typography variant="caption" color="text.secondary">{new Date(a.review.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</Typography></Box>}</TableCell>
-        <TableCell><Button component={Link} to={`/session/${a.id}`} size="small" variant="outlined">{sessionStatus(a, now) === 'awaiting_outcome' ? 'Review outcome' : 'Session details'}</Button><ReschedulePanel compact appointment={a} currentUser={currentUser} onUpdated={onUpdated} /></TableCell>
+        <TableCell><Button component={Link} to={`/session/${a.id}`} size="small" variant="outlined">{sessionStatus(a, now) === 'awaiting_outcome' ? 'Review outcome' : 'Session details'}</Button>{currentUser?.role === 'admin' && onEdit && canEditScheduledSession(a) && <Button size="small" onClick={() => onEdit(a)}>Edit session</Button>}<ReschedulePanel compact appointment={a} currentUser={currentUser} onUpdated={onUpdated} /></TableCell>
       </TableRow>)}{!visible.length && <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}>No sessions match this view.</TableCell></TableRow>}</TableBody>
     </Table></TableContainer>
   </Stack>;
