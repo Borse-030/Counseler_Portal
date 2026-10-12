@@ -47,6 +47,9 @@ export default function AdminScheduleSession({ request, patient, counselors, app
   const listRef = useRef(null);
   const counselorKey = counselors.map(c => c.id).join(',');
 
+
+
+
   useEffect(() => {
     let active = true;
     api.getCounselors().then(data => {
@@ -54,6 +57,8 @@ export default function AdminScheduleSession({ request, patient, counselors, app
     }).catch(() => { /* Use account details already loaded by the dashboard. */ });
     return () => { active = false; };
   }, []);
+
+
 
   useEffect(() => {
     let active = true;
@@ -65,8 +70,13 @@ export default function AdminScheduleSession({ request, patient, counselors, app
     return () => { active = false; };
   }, [counselorKey]);
 
+
+
   const validDate = Boolean(/^\d{4}-\d{2}-\d{2}$/.test(date) && date >= todayIST());
   const availabilityKey = `${counselorId}/${date}/${duration}/${requestedType}/${slotRefresh}`;
+
+
+
   useEffect(() => {
     let active = true;
     if (!counselorId || !validDate || !requestedType) return;
@@ -79,10 +89,16 @@ export default function AdminScheduleSession({ request, patient, counselors, app
   const detailsReady = details?.key === counselorKey;
   const allCounselors = sortCounselorMatches(counselors.map(c => {
     const profile = profiles[c.id];
-    const counselor = { ...profile, ...c,
+    const counselor = {
+      ...profile, ...c,
       languages: counselorLanguages(c.languages).length ? c.languages : profile?.languages,
       experience: c.experience ?? profile?.experience,
     };
+
+
+    console.log("matched counselor: ", counselor)
+
+
     const info = detailsReady ? details.data[c.id] : null;
     return { ...counselor, info, match: getCounselorMatch(counselor, info?.availability, requestedMode, preferredLanguage) };
   }));
@@ -194,9 +210,11 @@ export default function AdminScheduleSession({ request, patient, counselors, app
             {listView === 'matching' && !detailsReady ? <Stack spacing={0.5} sx={{ p: 1 }} aria-label="Loading counselor matches">{[1, 2, 3, 4].map(value => <Skeleton key={value} variant="rounded" height={64} />)}</Stack> : <RadioGroup name="assigned-counselor" value={counselorId} onChange={e => chooseCounselor(e.target.value)} aria-label="Choose a counselor">
               {visible.map(c => {
                 const fit = !c.info ? 'Checking…' : c.info.error ? 'Not verified' : c.match.recommended ? 'Matches' : c.match.modeMatch === false ? 'Mode differs' : c.match.languageMatch === false ? 'Language differs' : 'Not specified';
-                return <Box component="label" key={c.id} sx={{ px: 1.5, py: 0.75, minHeight: 56, display: 'grid', gridTemplateColumns: rowColumns, gap: 1, alignItems: 'center', cursor: busy ? 'default' : 'pointer', borderBottom: 1, borderColor: 'divider',
+                return <Box component="label" key={c.id} sx={{
+                  px: 1.5, py: 0.75, minHeight: 56, display: 'grid', gridTemplateColumns: rowColumns, gap: 1, alignItems: 'center', cursor: busy ? 'default' : 'pointer', borderBottom: 1, borderColor: 'divider',
                   boxShadow: counselorId === c.id ? 'inset 3px 0 0' : 'none', color: counselorId === c.id ? 'primary.main' : 'text.primary', bgcolor: counselorId === c.id ? 'action.selected' : 'background.paper',
-                  '&:last-child': { borderBottom: 0 }, '&:hover': { bgcolor: 'action.hover' }, '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }}>
+                  '&:last-child': { borderBottom: 0 }, '&:hover': { bgcolor: 'action.hover' }, '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 }
+                }}>
                   <Radio value={c.id} disabled={busy} size="small" sx={{ p: 0.25 }} slotProps={{ input: { 'aria-label': `Select ${c.name}` } }} />
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
                     <Avatar src={c.avatar} sx={{ display: { xs: 'none', sm: 'flex' }, width: 30, height: 30, fontSize: 11, bgcolor: 'primary.light', color: 'primary.dark' }}>{initials(c.name)}</Avatar>
@@ -261,6 +279,9 @@ export default function AdminScheduleSession({ request, patient, counselors, app
         </Stack>
       </Box>
     </DialogContent>
+
+
+
     <DialogActions sx={{ px: { xs: 2, md: 2.5 }, py: 1.5, flexShrink: 0, justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
       <Box sx={{ flex: '1 1 200px' }}><Typography variant="body2" fontWeight={600}>{selected?.name || 'No counselor selected'}</Typography>
         <Typography variant="caption" color="text.secondary">{validTime ? `${date} · ${time} IST · ${duration} min · ${modeLabel}` : 'Choose a counselor and an available time to continue.'}</Typography></Box>

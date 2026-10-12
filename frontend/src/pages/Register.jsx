@@ -35,10 +35,10 @@ const ALL_LANGUAGES = [
 ];
 
 const GENDER_OPTIONS = [
-  { value: 'Male', label: 'Male (Min. 21 yrs)' },
-  { value: 'Female', label: 'Female (Min. 18 yrs)' },
-  { value: 'Other', label: 'Other (Min. 18 yrs)' },
-  { value: 'Prefer not to say', label: 'Prefer not to say (Min. 18 yrs)' }
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' },
+  { value: 'Prefer not to say', label: 'Prefer not to say' }
 ];
 
 const CONSENT_ITEMS = [
@@ -75,13 +75,12 @@ const generateCaseId = () => {
   return `#${letters}-${num}`;
 };
 
-const getMaxDobForGender = (gender) => {
+const getTodayDateString = () => {
   const today = new Date();
-  const minAge = gender === 'Male' ? 21 : 18;
-  const maxYear = today.getFullYear() - minAge;
+  const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
-  return `${maxYear}-${month}-${day}`;
+  return `${year}-${month}-${day}`;
 };
 
 const calculateAge = (dobString) => {
@@ -213,9 +212,8 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   }, [formData.state]);
 
   const maxDobDate = useMemo(() => {
-    if (!formData.gender) return '';
-    return getMaxDobForGender(formData.gender);
-  }, [formData.gender]);
+    return getTodayDateString();
+  }, []);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
@@ -336,16 +334,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
         const districts = INDIAN_STATES_AND_DISTRICTS[value] || [];
         updated.district = districts[0] || '';
       }
-      if (field === 'gender') {
-        if (updated.dob) {
-          const age = calculateAge(updated.dob);
-          const minAge = value === 'Male' ? 21 : 18;
-          if (age !== null && age < minAge) {
-            updated.dob = '';
-            toast.warning(`Note: Minimum age for ${value} is ${minAge} years. Please re-enter date of birth.`);
-          }
-        }
-      }
+      // No age restriction based on gender
       return updated;
     });
 
@@ -399,14 +388,8 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
       errs.dob = 'Date of birth is required.';
     } else {
       const age = calculateAge(formData.dob);
-      if (age === null) {
+      if (age === null || age < 0 || age > 125) {
         errs.dob = 'Please enter a valid date of birth.';
-      } else {
-        const minAge = formData.gender === 'Male' ? 21 : 18;
-        if (age < minAge) {
-          errs.dob = `Age restriction: ${formData.gender} participants must be at least ${minAge} years old (Current age: ${age}).`;
-          toast.error(`Restriction: Minimum age for ${formData.gender} is ${minAge} years.`);
-        }
       }
     }
 
@@ -921,35 +904,25 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
                   <Typography sx={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e1b4b', mb: 0.75 }}>
                     Date of Birth <span style={{ color: '#ef4444' }}>*</span>
                   </Typography>
-                  <Tooltip
-                    title={!formData.gender ? 'Please select gender first to enable DOB entry' : ''}
-                    placement="top"
-                  >
-                    <TextField
-                      fullWidth
-                      type="date"
-                      disabled={!formData.gender}
-                      value={formData.dob}
-                      onChange={(e) => handleChange('dob', e.target.value)}
-                      inputProps={{
-                        max: maxDobDate
-                      }}
-                      error={Boolean(errors.dob)}
-                      helperText={
-                        errors.dob || (formData.gender
-                          ? `Must be ${formData.gender === 'Male' ? '21+' : '18+'} yrs (Max date: ${maxDobDate})`
-                          : 'Select Gender first to enable date picker')
-                      }
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <CalendarMonthOutlinedIcon sx={{ color: '#64748b', fontSize: 20 }} />
-                          </InputAdornment>
-                        )
-                      }}
-                      sx={formFieldSx}
-                    />
-                  </Tooltip>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    value={formData.dob}
+                    onChange={(e) => handleChange('dob', e.target.value)}
+                    inputProps={{
+                      max: maxDobDate
+                    }}
+                    error={Boolean(errors.dob)}
+                    helperText={errors.dob || 'Open to all age groups'}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <CalendarMonthOutlinedIcon sx={{ color: '#64748b', fontSize: 20 }} />
+                        </InputAdornment>
+                      )
+                    }}
+                    sx={formFieldSx}
+                  />
                 </Grid>
               </Grid>
             </Box>

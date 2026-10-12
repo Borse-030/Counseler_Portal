@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import {
   ThemeProvider, CssBaseline, AppBar, Toolbar, Typography, Button,
@@ -24,7 +24,6 @@ import { ToastContainer, toast } from 'react-toastify';
 
 import { getTheme } from './theme';
 import { api } from './api';
-
 // Pages imports
 import LandingPage from './pages/LandingPage/LandingPage';
 import SessionRequest from './pages/SessionRequest';
@@ -70,6 +69,9 @@ function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired })
 function AppContent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(api.getCurrentUser());
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifError, setNotifError] = useState(null);
 
   // Unified Auth Modal State
   const [authOpen, setAuthOpen] = useState(false);
@@ -94,6 +96,52 @@ function AppContent() {
     window.addEventListener('auth-invalid-token', handleInvalidToken);
     return () => window.removeEventListener('auth-invalid-token', handleInvalidToken);
   }, []);
+
+  const fetchNotifications = useCallback(async (isInitial = false) => {
+    if (!api.getToken()) return;
+    if (isInitial) setNotifLoading(true);
+    try {
+      const data = await api.getNotifications();
+      setNotifications(data || []);
+      setNotifError(null);
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+      setNotifError('Unable to load notifications. Please try again.');
+    } finally {
+      if (isInitial) setNotifLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      Promise.resolve().then(() => fetchNotifications(true));
+      const interval = setInterval(() => fetchNotifications(false), 10000);
+      return () => clearInterval(interval);
+    } else {
+      Promise.resolve().then(() => {
+        setNotifications([]);
+        setNotifError(null);
+      });
+    }
+  }, [currentUser, fetchNotifications]);
+
+  const handleMarkNotifRead = async (id) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const handleMarkAllNotifsRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
+  };
 
   // Open Unified Auth Modal for both Sign In and Register
   const handleOpenAuth = (presetMobile = '') => {
@@ -265,7 +313,18 @@ function AppContent() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
             {renderDashboardLink()}
 
-            {currentUser && <NotificationCenter key={currentUser.id} userId={currentUser.id} />}
+            {currentUser && (
+              <NotificationCenter
+                notifications={notifications}
+                unreadCount={notifications.filter(n => !n.read).length}
+                onMarkRead={handleMarkNotifRead}
+                onMarkAllRead={handleMarkAllNotifsRead}
+                loading={notifLoading}
+                error={notifError}
+                onRefresh={() => fetchNotifications(true)}
+                currentUser={currentUser}
+              />
+            )}
 
             {/* User Dropdown / Sign In Options */}
             {currentUser ? (

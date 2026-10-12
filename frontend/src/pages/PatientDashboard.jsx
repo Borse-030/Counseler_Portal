@@ -36,6 +36,9 @@ const getAppointmentDateParts = (dateValue) => {
 };
 
 export default function PatientDashboard({ currentUser, onUserUpdated }) {
+
+  console.log("counsellor current user ", currentUser);
+
   const now = useSessionClock();
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
@@ -172,6 +175,14 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
   const awaitingOutcome = appointments.filter(a => sessionStatus(a, now) === 'awaiting_outcome');
   const feedbackPending = appointments.filter(a => feedbackEligible(a) && !hasFeedback(a));
   const pastApts = appointments.filter(a => [...resolvedStatuses, 'awaiting_outcome', 'cancelled', 'rejected'].includes(sessionStatus(a, now)));
+
+  // Session Flow Metrics
+  const activeSessions = appointments.filter(a => a.status !== 'cancelled' && a.status !== 'rejected');
+  const completedSessions = appointments.filter(a => a.status === 'completed');
+  const overallSessions = activeSessions.length;
+  const sessionsCompleted = completedSessions.length;
+  const sessionsRemaining = Math.max(0, overallSessions - sessionsCompleted);
+  const allSessionsCompleted = overallSessions > 0 && sessionsRemaining === 0;
   const profileGroups = [
     {
       title: 'About you',
@@ -206,34 +217,17 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
     );
   }
 
+
+  console.log("currUser ", currentUser?.approved)
+
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
-      {!currentUser?.approved && (
-        <Alert
-          severity="warning"
-          icon={<HourglassEmptyIcon />}
-          sx={{
-            mb: 3,
-            borderRadius: 3,
-            bgcolor: '#fffbeb',
-            color: '#92400e',
-            border: '1px solid #fde68a',
-            '& .MuiAlert-icon': { color: '#d97706' },
-            p: 2.25
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: 'Outfit', mb: 0.5, fontSize: '0.98rem' }}>
-            Your profile is under review
-          </Typography>
-          <Typography variant="body2" sx={{ fontSize: '0.88rem', color: '#78350f' }}>
-            Your registration details and case file have been submitted and are currently awaiting administrative review. Access to schedule and book new counseling consultations will be enabled once your account is approved.
-          </Typography>
-        </Alert>
-      )}
 
-      {!currentUser?.approved && (
+
+      {currentUser?.approved === 'false' ? (
         <Alert
           severity="warning"
           icon={<HourglassEmptyIcon />}
@@ -254,7 +248,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
             Your registration details and case file have been submitted and are currently awaiting administrative review. Access to schedule and book new counseling consultations will be enabled once your account is approved.
           </Typography>
         </Alert>
-      )}
+      ) : null}
 
       {!!feedbackPending.length && <Alert severity="info" sx={{ mb: 2 }} action={<Button size="small" onClick={() => handleOpenReview(feedbackPending[0])}>Add feedback</Button>}>{feedbackPending.length} completed session{feedbackPending.length === 1 ? '' : 's'} awaiting your feedback.</Alert>}
       {!!awaitingOutcome.length && <Alert severity="info" sx={{ mb: 2 }}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended. Your counselor will confirm attendance before feedback becomes available. See Past journey for the status.</Alert>}
@@ -348,6 +342,72 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
       </Card>
 
 
+
+      {/* Session Flow Tracking */}
+      {overallSessions > 0 && (
+        <Card sx={{ mb: 3, borderRadius: 3, border: '1px solid', borderColor: allSessionsCompleted ? 'success.light' : 'divider', bgcolor: allSessionsCompleted ? '#f0fdf4' : 'background.paper' }}>
+          <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, fontFamily: 'Outfit' }}>
+                  Session Flow
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Your counseling journey session tracking and progress
+                </Typography>
+              </Box>
+              {allSessionsCompleted ? (
+                <Chip icon={<CheckCircleIcon />} label="All Sessions Completed" color="success" sx={{ fontWeight: 700, fontSize: '0.85rem' }} />
+              ) : (
+                <Chip label={`${sessionsRemaining} Remaining`} color="primary" variant="outlined" sx={{ fontWeight: 650 }} />
+              )}
+            </Box>
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
+                    Overall Sessions
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 800, fontFamily: 'Outfit', color: 'text.primary', mt: 0.5 }}>
+                    {overallSessions}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', textAlign: 'center' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
+                    Sessions Completed
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 800, fontFamily: 'Outfit', mt: 0.5 }}>
+                    {sessionsCompleted}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: allSessionsCompleted ? '#f8fafc' : '#eff6ff', border: '1px solid', borderColor: allSessionsCompleted ? '#e2e8f0' : '#bfdbfe', color: allSessionsCompleted ? '#64748b' : '#1e40af', textAlign: 'center' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
+                    Sessions Remaining
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 800, fontFamily: 'Outfit', mt: 0.5 }}>
+                    {sessionsRemaining}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: allSessionsCompleted ? '#10b981' : '#f8fafc', border: '1px solid', borderColor: allSessionsCompleted ? '#059669' : 'divider', color: allSessionsCompleted ? '#ffffff' : 'text.primary', textAlign: 'center' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', opacity: allSessionsCompleted ? 0.9 : 0.7 }}>
+                    Session Status
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, fontFamily: 'Outfit', mt: 1 }}>
+                    {allSessionsCompleted ? 'All Sessions Completed' : `${Math.round((sessionsCompleted / overallSessions) * 100)}% Completed`}
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dashboard Sections */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2.5 }}>
@@ -959,7 +1019,14 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box><Typography variant="caption" color="text.secondary">SESSION FORMAT</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{currentUser.preferredCounselingMode || 'Not selected'}</Typography></Box>
                   <Box><Typography variant="caption" color="text.secondary">PREFERRED LANGUAGE</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{currentUser.preferredLanguage || 'Not selected'}</Typography></Box>
-                  <Box><Typography variant="caption" color="text.secondary">SESSIONS COMPLETED</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{appointments.filter((apt) => apt.status === 'completed').length}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">OVERALL SESSIONS</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{overallSessions}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">SESSIONS COMPLETED</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{sessionsCompleted}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">SESSIONS REMAINING</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{sessionsRemaining}</Typography></Box>
+                  {allSessionsCompleted && (
+                    <Box sx={{ mt: 0.5 }}>
+                      <Chip size="small" icon={<CheckCircleIcon />} label="All Sessions Completed" color="success" sx={{ fontWeight: 700 }} />
+                    </Box>
+                  )}
                 </Box>
               </CardContent>
             </Card>

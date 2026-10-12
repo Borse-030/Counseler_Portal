@@ -50,3 +50,10 @@ test('sorting surfaces full matches while retaining every counselor and the orig
   assert.deepEqual(sortCounselorMatches(counselors).map(c => c.id), ['4', '3', '2', '1']);
   assert.deepEqual(counselors.map(c => c.id), ['1', '2', '3', '4']);
 });
+
+test('matches when patient has multiple comma-separated preferred languages', () => {
+  assert.equal(match(['Marathi', 'Hindi', 'English'], ['online'], 'English, Hindi, Marathi').languageMatch, true);
+  assert.equal(match(['Hindi'], ['online'], 'English, Hindi, Marathi').languageMatch, true);
+  assert.equal(match(['Tamil'], ['online'], 'English, Hindi, Marathi').languageMatch, false);
+});
+

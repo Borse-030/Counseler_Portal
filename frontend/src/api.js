@@ -387,5 +387,18 @@ export const api = {
     return request(`/notifications/${id}/read`, {
       method: 'PUT',
     });
+  },
+
+  markAllNotificationsRead: async () => {
+    try {
+      return await request('/notifications/read-all', {
+        method: 'PUT',
+      });
+    } catch (err) {
+      const notifs = await request('/notifications');
+      const unread = (notifs || []).filter(n => !n.read);
+      await Promise.all(unread.map(n => request(`/notifications/${n.id}/read`, { method: 'PUT' })));
+      return { success: true };
+    }
   }
 };

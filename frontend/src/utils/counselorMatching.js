@@ -6,9 +6,15 @@ export const counselorLanguages = languages => (Array.isArray(languages) ? langu
 
 export const getCounselorMatch = (counselor, availability, preferredMode, preferredLanguage) => {
   const languages = counselorLanguages(counselor.languages);
-  const language = normalize(preferredLanguage);
-  const hasLanguagePreference = Boolean(language && !['any', 'any language', 'no preference', 'not specified'].includes(language));
-  const languageMatch = hasLanguagePreference ? languages.some(value => normalize(value) === language) : null;
+  const preferredList = counselorLanguages(preferredLanguage);
+  const validPreferences = preferredList.filter(lang => {
+    const norm = normalize(lang);
+    return norm && !['any', 'any language', 'no preference', 'not specified'].includes(norm);
+  });
+  const hasLanguagePreference = validPreferences.length > 0;
+  const languageMatch = hasLanguagePreference
+    ? validPreferences.some(pref => languages.some(value => normalize(value) === normalize(pref)))
+    : null;
   const supportedModes = availability ? [...new Set(sessionTypesForAvailability(availability).map(type => sessionMode(type.name)))] : [];
   const modeMatch = availability && preferredMode ? supportedModes.includes(preferredMode) : null;
   return {

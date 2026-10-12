@@ -75,3 +75,15 @@ export const streamNotifications = (req, res) => {
   const expiry = setTimeout(() => res.end(), 5 * 60 * 1000);
   res.on('close', () => { unsubscribe(); clearInterval(heartbeat); clearTimeout(expiry); });
 };
+
+// export const markAllAsRead = async (req, res) => {
+//   try {
+//     await Notification.updateMany(
+//       { userId: req.userId, read: false },
+//       { read: true }
+//     );
+//     res.json({ success: true, message: 'All notifications marked as read.' });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };

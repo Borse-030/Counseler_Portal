@@ -99,7 +99,7 @@ export default function AdminDashboard({ currentUser }) {
   const [appointments, setAppointments] = useState([]);
   useEffect(() => {
     let active = true;
-    const refresh = () => api.getAppointments().then(data => { if (active) setAppointments(data); }).catch(() => {});
+    const refresh = () => api.getAppointments().then(data => { if (active) setAppointments(data); }).catch(() => { });
     window.addEventListener('focus', refresh);
     return () => { active = false; window.removeEventListener('focus', refresh); };
   }, []);
@@ -401,10 +401,10 @@ export default function AdminDashboard({ currentUser }) {
             </TableRow>;
           })}{!registrationRequests.length && <TableRow><TableCell colSpan={5}><Typography color="text.secondary" align="center" sx={{ py: 4 }}>No registration requests are waiting for review.</Typography></TableCell></TableRow>}</TableBody>
         </Table></TableContainer>}
-        {activeTab === 1 && <AccountList  onDeactivate={setDeactivateUser} users={activePatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
-        {activeTab === 2 && <AccountList  onDeactivate={setDeactivateUser} users={activeCounselors} onToggle={handleToggleSuspension} showCounselorDetails requests={careRequests} appointments={appointments} />}
-        {activeTab === 3 && <AccountList  onDeactivate={setDeactivateUser} users={discoveryPatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
-        {activeTab === 4 && <AccountList  onDeactivate={setDeactivateUser} users={archiveFilter === 'all' ? [...deactivatedPatients, ...deactivatedCounselors] : archiveFilter === 'patients' ? deactivatedPatients : deactivatedCounselors} onToggle={handleToggleSuspension} showCounselorDetails={archiveFilter === 'counselors'} requests={careRequests} appointments={appointments} />}
+        {activeTab === 1 && <AccountList onDeactivate={setDeactivateUser} users={activePatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
+        {activeTab === 2 && <AccountList onDeactivate={setDeactivateUser} users={activeCounselors} onToggle={handleToggleSuspension} showCounselorDetails requests={careRequests} appointments={appointments} />}
+        {activeTab === 3 && <AccountList onDeactivate={setDeactivateUser} users={discoveryPatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
+        {activeTab === 4 && <AccountList onDeactivate={setDeactivateUser} users={archiveFilter === 'all' ? [...deactivatedPatients, ...deactivatedCounselors] : archiveFilter === 'patients' ? deactivatedPatients : deactivatedCounselors} onToggle={handleToggleSuspension} showCounselorDetails={archiveFilter === 'counselors'} requests={careRequests} appointments={appointments} />}
       </Box>
       <Drawer anchor="right" open={Boolean(selectedCase) && !scheduleOpen} onClose={() => setSelectedCase(null)} PaperProps={{ sx: { width: { xs: '100vw', sm: 640 }, minWidth: { sm: 560 }, maxWidth: '100vw', p: 0 } }}>
         {selectedCase && currentCaseRequest && <Stack spacing={0} sx={{ height: '100%', overflowY: 'auto' }}>
@@ -449,10 +449,10 @@ export default function AdminDashboard({ currentUser }) {
               {currentCaseRequest.discoveryNotesHistory?.length ? <Stack spacing={1}>{[...currentCaseRequest.discoveryNotesHistory].reverse().map((entry, index) => <Paper key={`${entry.at}-${index}`} variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">{new Date(entry.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {entry.actorName || 'Admin'}</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{entry.notes}</Typography><DiscoveryPlanSummary plan={entry.discoveryPlan} /></Paper>)}</Stack> : currentCaseRequest.discoveryNotes ? <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">Current saved notes</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{currentCaseRequest.discoveryNotes}</Typography></Paper> : <Typography variant="body2" color="text.secondary">No discovery notes recorded yet.</Typography>}
             </Box>
 
-          {currentCaseRequest.status === 'discovery_completed' && !currentCaseRequest.finalCounselorId && <Box>
-            <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assign counselor and schedule session</Typography>
-            <Button variant="contained" disabled={discoveryBusy} onClick={() => setScheduleOpen(true)}>Assign counselor and schedule session</Button>
-          </Box>}
+            {currentCaseRequest.status === 'discovery_completed' && !currentCaseRequest.finalCounselorId && <Box>
+              <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assign counselor and schedule session</Typography>
+              <Button variant="contained" disabled={discoveryBusy} onClick={() => setScheduleOpen(true)}>Assign counselor and schedule session</Button>
+            </Box>}
 
             {currentCaseRequest.finalCounselorId && ['matched', 'active'].includes(currentCaseRequest.status) && <Box>
               <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assigned counselor</Typography>
@@ -461,11 +461,11 @@ export default function AdminDashboard({ currentUser }) {
               {scheduledCaseSession && <Alert severity="success" sx={{ mt: 1 }}>Session booked for {shortDate(scheduledCaseSession.date)} at {scheduledCaseSession.time} IST · {scheduledCaseSession.appointmentType || 'Consultation'}</Alert>}
             </Box>}
 
-          <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
-            {!!currentCaseRequest.reviews?.length && <Stack spacing={1} sx={{ mb: 1.5 }}>{currentCaseRequest.reviews.map((review, index) => <Paper key={`${review.at}-${index}`} variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">Registration {review.decision === 'accepted' ? 'approved' : 'rejected'} · {new Date(review.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {review.actorName}</Typography>{review.reason && <Typography variant="body2">{review.reason}</Typography>}</Paper>)}</Stack>}
-            {!!currentCaseRequest.timeline?.length && <Box component="details" sx={{ mb: 1.5 }}><Typography component="summary" variant="body2" fontWeight={650} sx={{ cursor: 'pointer', mb: 1 }}>Care timeline ({currentCaseRequest.timeline.length})</Typography>{[...currentCaseRequest.timeline].reverse().map((event, index) => <Typography key={`${event.at}-${index}`} variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>{new Date(event.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {event.actorName}: {event.note}</Typography>)}</Box>}
-            {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{canEditScheduledSession(appointment) && <Button size="small" sx={{ mt: 1 }} onClick={() => setEditingAppointment(appointment)}>Edit session</Button>}{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{hasFeedback(appointment) && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
-          </Box>
+            <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
+              {!!currentCaseRequest.reviews?.length && <Stack spacing={1} sx={{ mb: 1.5 }}>{currentCaseRequest.reviews.map((review, index) => <Paper key={`${review.at}-${index}`} variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">Registration {review.decision === 'accepted' ? 'approved' : 'rejected'} · {new Date(review.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {review.actorName}</Typography>{review.reason && <Typography variant="body2">{review.reason}</Typography>}</Paper>)}</Stack>}
+              {!!currentCaseRequest.timeline?.length && <Box component="details" sx={{ mb: 1.5 }}><Typography component="summary" variant="body2" fontWeight={650} sx={{ cursor: 'pointer', mb: 1 }}>Care timeline ({currentCaseRequest.timeline.length})</Typography>{[...currentCaseRequest.timeline].reverse().map((event, index) => <Typography key={`${event.at}-${index}`} variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>{new Date(event.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {event.actorName}: {event.note}</Typography>)}</Box>}
+              {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{hasFeedback(appointment) && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
+            </Box>
           </Stack>
         </Stack>}
       </Drawer>
