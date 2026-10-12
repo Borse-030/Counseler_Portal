@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import {
   ThemeProvider, CssBaseline, AppBar, Toolbar, Typography, Button,
   Box, IconButton, Dialog, DialogTitle, DialogContent, Alert, TextField,
   CircularProgress, Menu, MenuItem, Avatar,
-  Divider, Badge, Popover, Chip
+  Divider, Chip
 } from '@mui/material';
 import SpaIcon from '@mui/icons-material/Spa';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LogoutIcon from '@mui/icons-material/Logout';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import NotificationCenter from './components/NotificationCenter';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
@@ -70,8 +70,6 @@ function ProtectedRoute({ children, allowedRoles, currentUser, onAuthRequired })
 function AppContent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(api.getCurrentUser());
-  const [notifications, setNotifications] = useState([]);
-  const [notifAnchorEl, setNotifAnchorEl] = useState(null);
 
   // Unified Auth Modal State
   const [authOpen, setAuthOpen] = useState(false);
@@ -96,35 +94,6 @@ function AppContent() {
     window.addEventListener('auth-invalid-token', handleInvalidToken);
     return () => window.removeEventListener('auth-invalid-token', handleInvalidToken);
   }, []);
-
-  const fetchNotifications = useCallback(async () => {
-    if (!api.getToken()) return;
-    try {
-      const data = await api.getNotifications();
-      setNotifications(data || []);
-    } catch (err) {
-      console.error('Failed to load notifications', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      Promise.resolve().then(fetchNotifications);
-      const interval = setInterval(fetchNotifications, 10000);
-      return () => clearInterval(interval);
-    } else {
-      Promise.resolve().then(() => setNotifications([]));
-    }
-  }, [currentUser, fetchNotifications]);
-
-  const handleMarkNotifRead = async (id) => {
-    try {
-      await api.markNotificationRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   // Open Unified Auth Modal for both Sign In and Register
   const handleOpenAuth = (presetMobile = '') => {
@@ -296,61 +265,7 @@ function AppContent() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
             {renderDashboardLink()}
 
-            {currentUser && (
-              <Box>
-                <IconButton
-                  color="inherit"
-                  onClick={(e) => setNotifAnchorEl(e.currentTarget)}
-                >
-                  <Badge badgeContent={notifications.filter(n => !n.read).length} color="error">
-                    <NotificationsIcon />
-                  </Badge>
-                </IconButton>
-                <Popover
-                  open={Boolean(notifAnchorEl)}
-                  anchorEl={notifAnchorEl}
-                  onClose={() => setNotifAnchorEl(null)}
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  PaperProps={{ sx: { width: 320, maxHeight: 400, borderRadius: 3, p: 2 } }}
-                >
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, fontFamily: 'Outfit' }}>
-                    Notifications
-                  </Typography>
-                  <Divider sx={{ mb: 1 }} />
-                  {notifications.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center', fontStyle: 'italic' }}>
-                      No notifications yet.
-                    </Typography>
-                  ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 300 }}>
-                      {notifications.map((notif) => (
-                        <Box
-                          key={notif.id}
-                          onClick={() => handleMarkNotifRead(notif.id)}
-                          sx={{
-                            p: 1.5,
-                            borderRadius: 2,
-                            cursor: 'pointer',
-                            bgcolor: notif.read ? 'transparent' : 'action.hover',
-                            border: '1px solid',
-                            borderColor: notif.read ? 'divider' : 'primary.light',
-                            '&:hover': { bgcolor: 'action.selected' }
-                          }}
-                        >
-                          <Typography variant="body2" sx={{ fontWeight: notif.read ? 400 : 600 }}>
-                            {notif.message}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            {new Date(notif.date).toLocaleString()}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                </Popover>
-              </Box>
-            )}
+            {currentUser && <NotificationCenter key={currentUser.id} userId={currentUser.id} />}
 
             {/* User Dropdown / Sign In Options */}
             {currentUser ? (

@@ -13,7 +13,7 @@ const projectId = createHash('sha256').update(projectPath).digest('hex').slice(0
 export default defineConfig({
   // Keep WSL's dependency cache off Windows mounts, where renames can fail.
   cacheDir: isWslMountedProject
-    ? join(tmpdir(), `counselor-vite-${projectId}`)
+    ? join(tmpdir(), `counselor-vite-${projectId}-vite7`)
     : 'node_modules/.vite',
   plugins: [react()],
   server: {

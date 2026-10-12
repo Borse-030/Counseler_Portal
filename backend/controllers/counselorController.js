@@ -210,7 +210,7 @@ export const updateAvailability = async (req, res) => {
         endHour: endHour || '17:00',
         daysConfig: normalizedDays || []
       },
-      { new: true, upsert: true, runValidators: true }
+      { returnDocument: 'after', upsert: true, runValidators: true }
     );
 
     await logAction(req.userId, 'Updated weekly working schedule config', req);

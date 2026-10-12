@@ -36,7 +36,7 @@ export const requestReschedule = async (req, res) => {
     const request = { id: randomUUID(), status: 'pending', requesterId: actor.id, requesterName: actor.name, requesterRole: actor.role, reason: reason.trim(), preferredDate, preferredTime: preferredTime.trim(), requestedAt: new Date() };
     const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, 'rescheduleRequest.id': apt.rescheduleRequest?.id || null }, {
       $set: { rescheduleRequest: request }, $push: { rescheduleHistory: request },
-    }, { new: true, runValidators: true });
+    }, { returnDocument: 'after', runValidators: true });
     if (!updated) return res.status(409).json({ message: 'The session or request changed. Refresh before trying again.' });
     const admins = await User.find({ role: 'admin', suspended: { $ne: true } });
     await Promise.all(admins.map(admin => sendNotification(admin.id, `${actor.name} (${actor.role === 'counselor' ? 'counselor' : 'user'}) requested rescheduling for ${apt.patientName}'s session on ${apt.date} at ${apt.time} IST. Review it in Sessions & feedback.`)));
@@ -70,7 +70,7 @@ export const reviewReschedule = async (req, res) => {
       });
       const updated = await Appointment.findOneAndUpdate({ id: apt.id, 'rescheduleRequest.id': request.id, 'rescheduleRequest.status': 'scheduling' }, {
         $set: { rescheduleRequest: reviewed }, $push: { rescheduleHistory: reviewed },
-      }, { new: true, runValidators: true });
+      }, { returnDocument: 'after', runValidators: true });
       if (updated) await notifyParties(apt, `Your missed session has been rescheduled by the admin to ${replacement.date} at ${replacement.time} IST. Open the replacement session on your dashboard for joining details.`);
       const latest = updated || await Appointment.findOne({ id: apt.id });
       return res.json({ message: 'Replacement session scheduled.', appointment: presentAppointment(latest, actor), replacement: presentAppointment(replacement, actor) });
@@ -91,7 +91,7 @@ export const reviewReschedule = async (req, res) => {
     if (action === 'decline') {
       if (!response.trim()) return res.status(400).json({ message: 'Give a reason for declining this request.' });
       const reviewed = { ...requestSnapshot(request), status: 'declined', response: response.trim(), reviewerId: actor.id, reviewerName: actor.name, reviewedAt: new Date() };
-      const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, 'rescheduleRequest.id': request.id, 'rescheduleRequest.status': 'pending' }, { $set: { rescheduleRequest: reviewed }, $push: { rescheduleHistory: reviewed } }, { new: true, runValidators: true });
+      const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, 'rescheduleRequest.id': request.id, 'rescheduleRequest.status': 'pending' }, { $set: { rescheduleRequest: reviewed }, $push: { rescheduleHistory: reviewed } }, { returnDocument: 'after', runValidators: true });
       if (!updated) return res.status(409).json({ message: 'Another admin already reviewed this request.' });
       await notifyParties(apt, `The admin declined the rescheduling request for ${apt.date} at ${apt.time} IST. Reason: ${response.trim()}`);
       return res.json({ message: 'Rescheduling request declined.', appointment: presentAppointment(updated, actor) });
@@ -123,7 +123,7 @@ export const reviewReschedule = async (req, res) => {
       Object.assign(fields, { status: outcome, outcomeRecordedAt: at, outcomeRecordedById: actor.id, outcomeRecordedByName: actor.name });
       push.outcomeHistory = { previousStatus: sessionStatus(apt), outcome, actorId: actor.id, actorName: actor.name, actorRole: actor.role, reason: 'Attendance confirmed while approving rescheduling.', at };
     }
-    claimed = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, 'rescheduleRequest.id': request.id, ...stateGuard }, { $set: fields, ...(Object.keys(push).length ? { $push: push } : {}) }, { new: true, runValidators: true });
+    claimed = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, 'rescheduleRequest.id': request.id, ...stateGuard }, { $set: fields, ...(Object.keys(push).length ? { $push: push } : {}) }, { returnDocument: 'after', runValidators: true });
     if (!claimed) return res.status(409).json({ message: 'Another person changed the session or request. Refresh before continuing.' });
     let replacement;
     try {

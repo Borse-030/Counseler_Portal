@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer';
 import { Notification, User } from '../db.js';
+import { randomUUID } from 'node:crypto';
+import { publishNotificationEvent } from './notificationEvents.js';
 
 const isConfigured = (...values) => values.every((value) => value && String(value).trim());
 
@@ -29,36 +31,46 @@ const redactSensitiveResponse = (text = '', otp = '') => {
   return redacted.replace(/\s+/g, ' ').slice(0, 250);
 };
 
+let mailTransport;
 const getMailTransport = () => {
   if (!isConfigured(process.env.SMTP_HOST, process.env.SMTP_PORT, process.env.MAIL_USERNAME, process.env.MAIL_PASSWORD)) {
     return null;
   }
 
+  if (mailTransport) return mailTransport;
   const encryption = (process.env.SMTP_ENCRYPTION || '').toLowerCase();
-  return nodemailer.createTransport({
+  mailTransport = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 3,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 30000,
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT),
-    secure: encryption === 'ssl' || encryption === 'tls' || Number(process.env.SMTP_PORT) === 465,
+    secure: encryption === 'ssl' || Number(process.env.SMTP_PORT) === 465,
+    requireTLS: encryption === 'tls' || encryption === 'starttls',
     auth: {
       user: process.env.MAIL_USERNAME,
       pass: process.env.MAIL_PASSWORD
     }
   });
+  return mailTransport;
 };
 
-const createInAppNotification = async (userId, message) => {
+const createInAppNotification = async (userId, message, email) => {
   const newNotification = new Notification({
-    id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    id: `notif_${randomUUID()}`,
     userId,
     message,
     date: new Date(),
-    read: false
+    read: false,
+    email,
   });
   await newNotification.save();
   return newNotification;
 };
 
-export const sendEmail = async ({ to, subject, text, html }) => {
+export const sendEmail = async ({ to, subject, text, html, messageId }) => {
   if (!to) return { skipped: true, reason: 'missing_recipient' };
 
   const transport = getMailTransport();
@@ -74,7 +86,8 @@ export const sendEmail = async ({ to, subject, text, html }) => {
     to,
     subject,
     text,
-    html
+    html,
+    messageId,
   });
 };
 
@@ -123,17 +136,22 @@ export const sendOtpSms = async (mobile, otp) => {
 
 export const sendNotification = async (userId, message, options = {}) => {
   try {
-    const notification = await createInAppNotification(userId, message);
     const user = options.user || await User.findOne({ id: userId });
-
-    await sendEmail({
-      to: options.email || user?.email,
+    const to = options.email || user?.email;
+    const text = options.emailText || message;
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const email = {
+      to,
       subject: options.subject || 'Counselling Program notification',
-      text: options.emailText || message,
-      html: options.emailHtml
-    });
-
-    console.log(`[Notification to ${userId}] ${message}`);
+      text,
+      html: options.emailHtml || `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#1e1b4b"><h2 style="color:#4f46e5">BJS Counselling</h2><p>Hello ${escapeHtml(user?.name || 'there')},</p><p style="line-height:1.7">${escapeHtml(text).replace(/\n/g, '<br>')}</p><hr style="border:0;border-top:1px solid #e2e8f0"><p style="font-size:12px;color:#64748b">You can review this update in your BJS Counselling dashboard.</p></div>`,
+      status: to ? 'pending' : 'skipped',
+      nextAttemptAt: new Date(),
+      attempts: 0,
+    };
+    // Persist the inbox item and email job together before publishing.
+    const notification = await createInAppNotification(userId, message, email);
+    publishNotificationEvent(userId, { type: 'notification', id: notification.id });
     return notification;
   } catch (error) {
     console.error('Error sending notification:', error);

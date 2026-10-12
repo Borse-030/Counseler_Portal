@@ -1,28 +1,26 @@
 import express from 'express';
-import { getNotifications, markAsRead } from '../controllers/notificationController.js';
+import { getNotifications, markAsRead, markAllAsRead, streamNotifications } from '../controllers/notificationController.js';
 import { getUserIdFromToken } from '../utils/security.js';
+import { User } from '../models/index.js';
 import { sendNotification } from '../utils/notificationService.js';
 
 const router = express.Router();
-
-const authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  const token = authHeader.split(' ')[1];
+const authenticate = async (req, res, next) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ message: 'Unauthorized' });
   try {
-    const userId = getUserIdFromToken(token);
+    const userId = getUserIdFromToken(header.slice(7));
+    const user = await User.findOne({ id: userId }).select('id suspended').lean();
+    if (!user) return res.status(401).json({ message: 'Invalid token' });
+    if (user.suspended) return res.status(403).json({ message: 'Your account has been suspended.' });
     req.userId = userId;
     next();
-  } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' });
-  }
+  } catch { return res.status(401).json({ message: 'Invalid token' }); }
 };
-
-router.get('/', authenticate, getNotifications);
-router.put('/:id/read', authenticate, markAsRead);
-
+router.use(authenticate);
+router.get('/stream', streamNotifications);
+router.get('/', getNotifications);
+router.put('/read-all', markAllAsRead);
+router.put('/:id/read', markAsRead);
 export default router;
-export { router as notificationsRouter };
-export { sendNotification };
+export { router as notificationsRouter, sendNotification };

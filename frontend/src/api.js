@@ -1,5 +1,7 @@
 ﻿const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+import { consumeNotificationStream } from './utils/notificationStream';
+
 let authToken = localStorage.getItem('token') || null;
 let refreshToken = localStorage.getItem('refreshToken') || null;
 
@@ -329,8 +331,50 @@ export const api = {
   },
 
   // Notifications API
-  getNotifications: async () => {
-    return request('/notifications');
+  getNotifications: async ({ cursor, filter = 'all', limit = 25, signal } = {}) => {
+    const params = new URLSearchParams({ filter, limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return request(`/notifications?${params}`, { signal });
+  },
+
+  markAllNotificationsRead: (before) => request('/notifications/read-all', {
+    method: 'PUT', body: JSON.stringify({ before }),
+  }),
+
+  // Fetch-based SSE keeps bearer tokens out of URLs and access logs.
+  subscribeNotifications: (onEvent, onStatus) => {
+    const controller = new AbortController();
+    let timer;
+    let delay = 1000;
+    const connect = async () => {
+      if (controller.signal.aborted || !authToken) return;
+      try {
+        onStatus('connecting');
+        const response = await fetch(`${BASE_URL}/notifications/stream`, {
+          headers: { Authorization: `Bearer ${authToken}`, Accept: 'text/event-stream' },
+          signal: controller.signal,
+        });
+        if (response.status === 401) {
+          await request('/notifications?limit=1', { signal: controller.signal });
+          throw new Error('Reconnecting with refreshed session');
+        }
+        if (!response.ok || !response.body) throw new Error('Notification connection unavailable');
+        onStatus('live');
+        delay = 1000;
+        await consumeNotificationStream(response.body, event => {
+          if (!controller.signal.aborted) onEvent(event);
+        });
+      } catch {
+        // The next connection reconciles any missed events.
+      }
+      if (!controller.signal.aborted && authToken) {
+        onStatus('reconnecting');
+        timer = setTimeout(connect, delay + Math.random() * 500);
+        delay = Math.min(delay * 2, 30000);
+      }
+    };
+    void connect();
+    return () => { controller.abort(); clearTimeout(timer); };
   },
 
   markNotificationRead: async (id) => {

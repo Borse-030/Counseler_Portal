@@ -428,7 +428,7 @@ export const recordSessionOutcome = async (req, res) => {
     const updated = await Appointment.findOneAndUpdate({ id: apt.id, status: apt.status, date: apt.date, time: apt.time, duration: apt.duration, outcomeRecordedAt: apt.outcomeRecordedAt || null, 'rescheduleRequest.id': apt.rescheduleRequest?.id || null, 'rescheduleRequest.status': { $eq: apt.rescheduleRequest?.status || null, $nin: ['scheduling', 'scheduled'] } }, {
       $set: fields,
       $push: { outcomeHistory: { previousStatus: presented.status, outcome, actorId: actor.id, actorName: actor.name, actorRole: actor.role, reason: reason.trim(), at }, ...(closeReschedule ? { rescheduleHistory: requestHistory } : {}) },
-    }, { new: true, runValidators: true });
+    }, { returnDocument: 'after', runValidators: true });
     if (!updated) return res.status(409).json({ message: 'Another person recorded an outcome. Refresh this session.' });
     if (closeReschedule) await sendNotification(apt.rescheduleRequest.requesterId, 'Your rescheduling request was closed because the session was confirmed as completed. Contact the admin if this outcome is incorrect.');
     if (requestFeedback) await sendNotification(apt.patientId, 'Your counseling session with ' + apt.counselorName + ' on ' + apt.date + ' is completed. Please share your feedback from your dashboard (Past journey).');
@@ -459,7 +459,7 @@ export const submitReview = async (req, res) => {
     const saved = await Appointment.findOneAndUpdate({
       id: apt.id, patientId: req.userId, status: 'completed', 'review.date': { $exists: false },
       $or: [{ 'review.reviewText': { $exists: false } }, { 'review.reviewText': null }, { 'review.reviewText': { $regex: '^\s*$' } }],
-    }, { $set: { review: newReview } }, { new: true, runValidators: true });
+    }, { $set: { review: newReview } }, { returnDocument: 'after', runValidators: true });
     if (!saved) return res.status(409).json({ message: 'Feedback was already submitted or the session outcome changed. Refresh your dashboard.' });
     await logAction(req.userId, 'Submitted written session feedback for ' + apt.counselorName, req);
     res.json({ message: 'Feedback submitted successfully.', review: newReview });
