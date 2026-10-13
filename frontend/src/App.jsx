@@ -102,7 +102,9 @@ function AppContent() {
     if (isInitial) setNotifLoading(true);
     try {
       const data = await api.getNotifications();
-      setNotifications(data || []);
+      console.log("Debug notification ", data)
+
+      setNotifications(data.items || []);
       setNotifError(null);
     } catch (err) {
       console.error('Failed to load notifications', err);
@@ -313,7 +315,7 @@ function AppContent() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
             {renderDashboardLink()}
 
-            {currentUser && (
+            {currentUser && notifications.length > 0 && (
               <NotificationCenter
                 notifications={notifications}
                 unreadCount={notifications.filter(n => !n.read).length}
