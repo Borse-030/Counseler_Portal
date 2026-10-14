@@ -417,6 +417,28 @@ footer span {
   text-align: right;
 }
 
+@keyframes calm-drift {
+  0% {
+    transform: translate(0px, 0px);
+  }
+
+  33% {
+    transform: translate(5px, -3px);
+  }
+
+  66% {
+    transform: translate(-3px, 4px);
+  }
+
+  100% {
+    transform: translate(0px, 0px);
+  }
+}
+
+.calm-idle {
+  animation: calm-drift 14s ease-in-out infinite;
+}
+
 /* MOBILE */
 
 @media (max-width: 800px) {

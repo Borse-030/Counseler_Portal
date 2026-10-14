@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Box,
@@ -49,6 +49,12 @@ import ExploreOutlinedIcon from '@mui/icons-material/ExploreOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import HandshakeOutlinedIcon from '@mui/icons-material/HandshakeOutlined';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
+
+const scenes = [
+  { src: "/Worried.svg", duration: 3000 },
+  { src: "/SeekHelp.svg", duration: 3000 },
+  { src: "/Relieved.svg", duration: 4000 },
+];
 
 const PROMISES = [
   {
@@ -521,6 +527,21 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
   const [expandedFaq, setExpandedFaq] = useState(false);
   const [activeCareGroup, setActiveCareGroup] = useState(0);
   const [activeConcern, setActiveConcern] = useState(0);
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const [currentScene, setCurrentScene] = useState(0);
+
+
+
+  const phrases = [
+    { text: "better relationships.", color: "#378579" },
+    { text: "open conversations.", color: "#6484BD" },
+    { text: "mutual understanding.", color: "#8B78B5" },
+    { text: "healthier connections.", color: "#C56F91" },
+    { text: "mental clarity.", color: "#71966F" },
+    { text: "new beginnings.", color: "#96966f" },
+  ];
+
 
   const navigate = useNavigate()
 
@@ -533,6 +554,27 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       onOpenRegisterAuth();
     }
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible(false);
+
+      setTimeout(() => {
+        setPhraseIndex((prev) => (prev + 1) % phrases.length);
+        setVisible(true);
+      }, 400);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentScene((prev) => (prev + 1) % scenes.length);
+    }, scenes[currentScene].duration);
+
+    return () => clearTimeout(timer);
+  }, [currentScene]);
 
   return (
     <Box
@@ -548,7 +590,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       }}
     >
       {/* 1. HERO SECTION (ROW-WISE 2 ELEMENTS: LEFT TEXT/CTAS + RIGHT IMAGE) */}
-      <Box sx={{ pt: { xs: 4, md: 6 }, pb: { xs: 5, md: 7 }, width: '100%' }}>
+      <Box sx={{ pt: { xs: 4, md: 6 }, pb: { xs: 5, md: 6 }, width: '100%' }}>
         <Container maxWidth="xl" sx={{ px: { xs: 2.5, sm: 4, md: 6, lg: 8 } }}>
           <Box
             sx={{
@@ -584,36 +626,50 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               </Box> */}
 
               {/* Main Headline */}
+
               <Typography
                 component="h1"
                 sx={{
                   fontSize: { xs: "2.8rem", sm: "3.5rem", md: "4.5rem" },
                   lineHeight: 1.05,
                   fontWeight: 600,
+                  textWrap:"wrap",
                   letterSpacing: "-2px",
-                  maxWidth: "650px",
+                   width: {xs:"100%", sm:"100%"},
+                  // maxWidth: "650px",
                   mb: 3,
                 }}
               >
                 A safe space for{" "}
+
+
                 <Box
                   component="span"
                   sx={{
-                    color: '#059669',
+                    color: phrases[phraseIndex].color,
                     fontWeight: 600,
+                    display: "inline-block",
+                    height: { xs: "1.75em", sm: "1em", md: "2em" },
+                    lineHeight: 1.05,
+                    verticalAlign: "bottom",
+                    opacity: visible ? 1 : 0,
+                    transition: "opacity 400ms ease-in-out",
                   }}
                 >
-                  better relationships.
+                  {phrases[phraseIndex].text}
                 </Box>
               </Typography>
+
 
               {/* Subtitle */}
               <Typography
                 sx={{
-                  fontSize: { xs: '1rem', sm: '1.12rem' },
+                  fontSize: { xs: '1rem', sm: '1.12rem', md:"1.25rem" },
+                  width:"100%",
                   color: '#475569',
                   lineHeight: 1.65,
-                  maxWidth: '640px',
+                  // maxWidth: '640px',
+                   width: {xs:"100%", sm:"100%"},
                   mb: 4,
                   fontWeight: 400,
                 }}
@@ -737,55 +793,29 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                 position: 'relative',
                 borderRadius: '28px',
                 overflow: 'hidden',
-                boxShadow: '0 25px 60px rgba(76, 59, 113, 0.18)',
-                border: '6px solid #ffffff',
-                bgcolor: '#ffffff',
-                width: '100%',
+                // bgcolor: '#ff00ff',
+                width: "100%",
+                height: { xs: "320px", sm: "420px", md: "4/3" },
+                aspectRatio: { xs: "4 / 3", sm: "5 / 4", md: "4/3" },
               }}
             >
-              {/* Top Floating Pill on Image */}
-              {/* <Box
-                sx={{
-                  position: 'absolute',
-                  top: 18,
-                  right: 18,
-                  zIndex: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.85,
-                  px: 1.75,
-                  py: 0.65,
-                  borderRadius: '99px',
-                  bgcolor: 'rgba(255, 255, 255, 0.94)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.8)',
-                  boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-                }}
-              >
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#16a34a' }} />
-                <Box>
-                  <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#15803d', lineHeight: 1.1 }}>
-                    Available Today
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.65rem', color: '#64748b' }}>
-                    In-person studio & online
-                  </Typography>
-                </Box>
-              </Box> */}
-
               {/* Consultation Room Image */}
               <Box
                 component="img"
-                src="/hero-counseling.jpg"
-                alt="Counseling Consultation Session"
+                src={scenes[currentScene].src}
+                aria-label="Counselling journey illustration"
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls={false}
                 sx={{
-                  width: '100%',
-                  height: { xs: '320px', sm: '420px', md: 'fit-content' },
-                  objectFit: 'contain',
-                  display: 'block',
-                }}
-                onError={(e) => {
-                  e.currentTarget.src = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&auto=format&fit=crop&q=80';
+                  width: "100%",
+                  height: "100%",
+                  aspectRatio: { xs: "4 / 3", sm: "5 / 4", md: "auto" },
+                  objectFit: "contain",
+                  display: "block",
+                  borderRadius: "20px",
                 }}
               />
 
@@ -838,8 +868,6 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
             </Box>
           </Box>
         </Container>
-
-
       </Box>
 
       {/* 3. FIND THE SUPPORT THAT'S RIGHT FOR YOU (ROW-WISE 2 ELEMENTS: LEFT LARGE CARD + RIGHT 3 STACKED CARDS) */}
@@ -1192,272 +1220,273 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       </Box> */}
 
       {/* 4. CHOOSE WHAT FEELS COMFORTABLE (ROW-WISE 2 ELEMENTS: LEFT FORMAT CARDS + RIGHT SANCTUARY PHOTO) */}
-      <Typography variant="h2" sx={{ fontFamily: 'Outfit', fontWeight: 800, textAlign: "center", fontSize: { xs: '2rem', sm: '2.5rem' }, color: '#1e1b4b', letterSpacing: '-0.8px', m: 3 }}>
-        Choose what feels comfortable
-      </Typography>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-          gap: 3,
-          mx: 10,
-          alignItems: 'stretch',
-        }}
-      >
-        {[
-          {
-            id: 'online',
-            title: 'PRIVATE ONLINE SESSION',
-            icon: VideocamOutlinedIcon,
-            color: '#197985',
-            shadow: 'rgba(25, 121, 133, 0.18)',
-            items: [
-              {
-                label: 'How it is booked',
-                text: 'Scheduled through a calendar invite',
-              },
-              {
-                label: 'Where it happens',
-                text: 'Secure Zoom or Google Meet link',
-              },
-              {
-                label: 'Privacy',
-                text: 'Counsellor works from a quiet, private office with a professional headset',
-              },
-              {
-                label: 'Support on hand',
-                text: 'IT team on call for connectivity problems',
-              },
-            ],
-          },
-          {
-            id: 'studio',
-            title: 'AT HEAD OFFICE',
-            icon: MeetingRoomOutlinedIcon,
-            color: '#B3315A',
-            shadow: 'rgba(179, 49, 90, 0.18)',
-            items: [
-              {
-                label: 'How it is booked',
-                text: 'Timing strictly as per the master schedule',
-              },
-              {
-                label: 'Where it happens',
-                text: 'Dedicated consultation chamber at the Head Office',
-              },
-              {
-                label: 'Privacy',
-                text: 'Sound-proof room for absolute privacy',
-              },
-              {
-                label: 'Support on hand',
-                text: 'Front desk greets you, offers water and escorts you from the waiting lounge',
-              },
-            ],
-          },
-        ].map((option, optionIndex) => {
-          const isSelected = formatMode === option.id;
-          const Icon = option.icon;
-
-          return (
-            <Card
-              key={option.id}
-              onClick={() => setFormatMode(option.id)}
-              elevation={0}
-              sx={{
-                borderRadius: '14px',
-                overflow: 'hidden',
-                cursor: 'pointer',
-
-                // Selection
-                border: isSelected
-                  ? `2px solid ${option.color}`
-                  : '1px solid #e2e8f0',
-
-                opacity: isSelected ? 1 : 0.58,
-
-                transform: isSelected
-                  ? 'scale(1.025) translateY(-5px)'
-                  : 'scale(0.97)',
-
-                boxShadow: isSelected
-                  ? `0 8px 24px ${option.shadow}`
-                  : '0 3px 12px rgba(0,0,0,0.035)',
-
-                transition:
-                  'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), ' +
-                  'box-shadow 0.4s ease, ' +
-                  'opacity 0.4s ease, ' +
-                  'filter 0.4s ease, ' +
-                  'border-color 0.4s ease',
-
-                animation: 'formatCardIn 0.55s ease both',
-                animationDelay: `${optionIndex * 100}ms`,
-
-                '&:hover': {
-                  opacity: 1,
-                  filter: 'none',
-                  transform: isSelected
-                    ? 'scale(1.025) translateY(-7px)'
-                    : 'scale(0.99) translateY(-3px)',
+      <Box sx={{ py: { xs: 3, md: 4 } }}>
+        <Typography variant="h2" sx={{ fontFamily: 'Outfit', fontWeight: 800, textAlign: "center", fontSize: { xs: '2rem', sm: '2.5rem' }, color: '#1e1b4b', letterSpacing: '-0.8px', mb: 3 }}>
+          Choose what feels comfortable
+        </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+            gap: 3,
+            mx: { xs: 2, sm: 10 },
+            alignItems: 'stretch',
+          }}
+        >
+          {[
+            {
+              id: 'online',
+              title: 'PRIVATE ONLINE SESSION',
+              icon: VideocamOutlinedIcon,
+              color: '#197985',
+              shadow: 'rgba(25, 121, 133, 0.18)',
+              items: [
+                {
+                  label: 'How it is booked',
+                  text: 'Scheduled through a calendar invite',
                 },
-
-                '@keyframes formatCardIn': {
-                  from: {
-                    opacity: 0,
-                    transform: 'translateY(18px)',
-                  },
-                  to: {
-                    opacity: 1,
-                    transform: isSelected ? 'translateY(-3px)' : 'none',
-                  },
+                {
+                  label: 'Where it happens',
+                  text: 'Secure Zoom or Google Meet link',
                 },
-              }}
-            >
-              {/* Header */}
-              <Box
+                {
+                  label: 'Privacy',
+                  text: 'Counsellor works from a quiet, private office with a professional headset',
+                },
+                {
+                  label: 'Support on hand',
+                  text: 'IT team on call for connectivity problems',
+                },
+              ],
+            },
+            {
+              id: 'studio',
+              title: 'AT HEAD OFFICE',
+              icon: MeetingRoomOutlinedIcon,
+              color: '#B3315A',
+              shadow: 'rgba(179, 49, 90, 0.18)',
+              items: [
+                {
+                  label: 'How it is booked',
+                  text: 'Timing strictly as per the master schedule',
+                },
+                {
+                  label: 'Where it happens',
+                  text: 'Dedicated consultation chamber at the Head Office',
+                },
+                {
+                  label: 'Privacy',
+                  text: 'Sound-proof room for absolute privacy',
+                },
+                {
+                  label: 'Support on hand',
+                  text: 'Front desk greets you, offers water and escorts you from the waiting lounge',
+                },
+              ],
+            },
+          ].map((option, optionIndex) => {
+            const isSelected = formatMode === option.id;
+            const Icon = option.icon;
+
+            return (
+              <Card
+                key={option.id}
+                onClick={() => setFormatMode(option.id)}
+                elevation={0}
                 sx={{
-                  px: { xs: 2.5, sm: 3 },
-                  py: 2.5,
+                  borderRadius: '14px',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
 
-                  bgcolor: '#fff',
-                  color: '#1e293b',
-                  borderBottom: '1px solid #edf1f3',
+                  // Selection
+                  border: isSelected
+                    ? `2px solid ${option.color}`
+                    : '1px solid #e2e8f0',
 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
+                  opacity: isSelected ? 1 : 0.58,
+
+                  transform: isSelected
+                    ? 'scale(1.025) translateY(-5px)'
+                    : 'scale(0.97)',
+
+                  boxShadow: isSelected
+                    ? `0 8px 24px ${option.shadow}`
+                    : '0 3px 12px rgba(0,0,0,0.035)',
 
                   transition:
-                    'background-color 0.4s ease, color 0.4s ease',
+                    'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), ' +
+                    'box-shadow 0.4s ease, ' +
+                    'opacity 0.4s ease, ' +
+                    'filter 0.4s ease, ' +
+                    'border-color 0.4s ease',
+
+                  animation: 'formatCardIn 0.55s ease both',
+                  animationDelay: `${optionIndex * 100}ms`,
+
+                  '&:hover': {
+                    opacity: 1,
+                    filter: 'none',
+                    transform: isSelected
+                      ? 'scale(1.025) translateY(-7px)'
+                      : 'scale(0.99) translateY(-3px)',
+                  },
+
+                  '@keyframes formatCardIn': {
+                    from: {
+                      opacity: 0,
+                      transform: 'translateY(18px)',
+                    },
+                    to: {
+                      opacity: 1,
+                      transform: isSelected ? 'translateY(-3px)' : 'none',
+                    },
+                  },
                 }}
               >
+                {/* Header */}
                 <Box
                   sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: '12px',
+                    px: { xs: 2.5, sm: 3 },
+                    py: 2.5,
+
+                    bgcolor: '#fff',
+                    color: '#1e293b',
+                    borderBottom: '1px solid #edf1f3',
+
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: 1.5,
 
-                    bgcolor: isSelected
-                      ? 'rgba(255,255,255,0.16)'
-                      : 'rgba(255,255,255,0.7)',
-
-                    transition: 'all 0.4s ease',
-
-                    '& svg': {
-                      fontSize: isSelected ? 27 : 24,
-                      transition: 'font-size 0.4s ease',
-                    },
+                    transition:
+                      'background-color 0.4s ease, color 0.4s ease',
                   }}
                 >
-                  <Icon sx={{
-                    bgcolor: `${option.color}15`,
-                    color: option.color
-                  }}
-                  />
-                </Box>
-
-                <Typography
-                  sx={{
-                    fontSize: {
-                      xs: '1.05rem',
-                      sm: '1.2rem',
-                    },
-                    fontWeight: 800,
-                    letterSpacing: '1px',
-                    transition: 'font-size 0.4s ease',
-                  }}
-                >
-                  {option.title}
-                </Typography>
-              </Box>
-
-              {/* Details */}
-              <Box
-                sx={{
-                  p: { xs: 2, sm: 2.5 },
-                  bgcolor: isSelected ? '#fff' : '#f8fafc',
-                  transition: 'background-color 0.4s ease',
-                }}
-              >
-                {option.items.map((item, index) => (
                   <Box
-                    key={item.label}
                     sx={{
-                      display: 'grid',
-                      gridTemplateColumns: {
-                        xs: '1fr',
-                        sm: '1fr',
-                      },
-                      gap: 2,
+                      width: 42,
+                      height: 42,
+                      borderRadius: '12px',
+                      display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'center',
 
-                      py: 2,
+                      bgcolor: isSelected
+                        ? 'rgba(255,255,255,0.16)'
+                        : 'rgba(255,255,255,0.7)',
 
-                      borderBottom:
-                        index !== option.items.length - 1
-                          ? '1px solid #edf1f3'
-                          : 'none',
+                      transition: 'all 0.4s ease',
 
-                      animation: isSelected
-                        ? 'rowIn 0.4s ease both'
-                        : 'none',
-
-                      animationDelay: `${index * 70}ms`,
-
-                      '@keyframes rowIn': {
-                        from: {
-                          opacity: 0,
-                          transform: 'translateX(-6px)',
-                        },
-                        to: {
-                          opacity: 1,
-                          transform: 'translateX(0)',
-                        },
+                      '& svg': {
+                        fontSize: isSelected ? 27 : 24,
+                        transition: 'font-size 0.4s ease',
                       },
                     }}
                   >
+                    <Icon sx={{
+                      bgcolor: `${option.color}15`,
+                      color: option.color
+                    }}
+                    />
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      fontSize: {
+                        xs: '1.05rem',
+                        sm: '1.2rem',
+                      },
+                      fontWeight: 800,
+                      letterSpacing: '1px',
+                      transition: 'font-size 0.4s ease',
+                    }}
+                  >
+                    {option.title}
+                  </Typography>
+                </Box>
+
+                {/* Details */}
+                <Box
+                  sx={{
+                    p: { xs: 2, sm: 2.5 },
+                    bgcolor: isSelected ? '#fff' : '#f8fafc',
+                    transition: 'background-color 0.4s ease',
+                  }}
+                >
+                  {option.items.map((item, index) => (
                     <Box
+                      key={item.label}
                       sx={{
-                        display: "flex",
-                        flexDirection: "column"
+                        display: 'grid',
+                        gridTemplateColumns: {
+                          xs: '1fr',
+                          sm: '1fr',
+                        },
+                        gap: 2,
+                        alignItems: 'center',
+
+                        py: 2,
+
+                        borderBottom:
+                          index !== option.items.length - 1
+                            ? '1px solid #edf1f3'
+                            : 'none',
+
+                        animation: isSelected
+                          ? 'rowIn 0.4s ease both'
+                          : 'none',
+
+                        animationDelay: `${index * 70}ms`,
+
+                        '@keyframes rowIn': {
+                          from: {
+                            opacity: 0,
+                            transform: 'translateX(-6px)',
+                          },
+                          to: {
+                            opacity: 1,
+                            transform: 'translateX(0)',
+                          },
+                        },
                       }}
                     >
-
-                      <Typography
+                      <Box
                         sx={{
-                          fontWeight: 800,
-                          fontSize: '0.82rem',
-                          color: isSelected
-                            ? option.color
-                            : '#94a3b8',
-                          transition: 'color 0.4s ease',
+                          display: "flex",
+                          flexDirection: "column"
                         }}
                       >
-                        {item.label}
-                      </Typography>
 
-                      <Typography
-                        sx={{
-                          fontSize: '0.9rem',
-                          color: isSelected
-                            ? '#334155'
-                            : '#94a3b8',
-                          lineHeight: 1.5,
-                          transition: 'color 0.4s ease',
-                        }}
-                      >
-                        {item.text}
-                      </Typography>
+                        <Typography
+                          sx={{
+                            fontWeight: 800,
+                            fontSize: '0.82rem',
+                            color: isSelected
+                              ? option.color
+                              : '#94a3b8',
+                            transition: 'color 0.4s ease',
+                          }}
+                        >
+                          {item.label}
+                        </Typography>
 
+                        <Typography
+                          sx={{
+                            fontSize: '0.9rem',
+                            color: isSelected
+                              ? '#334155'
+                              : '#94a3b8',
+                            lineHeight: 1.5,
+                            transition: 'color 0.4s ease',
+                          }}
+                        >
+                          {item.text}
+                        </Typography>
+
+                      </Box>
                     </Box>
-                  </Box>
-                ))}
-              </Box>
-              {/* <Box sx={{ px: 2, pb: 2 }}>
+                  ))}
+                </Box>
+                {/* <Box sx={{ px: 2, pb: 2 }}>
                 <Button
                   fullWidth
                   variant={isSelected ? 'contained' : 'outlined'}
@@ -1487,13 +1516,14 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                     : 'Select Head Office Session →'}
                 </Button>
               </Box> */}
-            </Card>
-          );
-        })}
+              </Card>
+            );
+          })}
+        </Box>
       </Box>
 
       {/* 5. GETTING STARTED IS SIMPLE & GENTLE (6 HORIZONTAL STEP CARDS IN A ROW) */}
-      <Box sx={{ py: { xs: 6, md: 8 }, width: '100%' }}>
+      <Box id="how-it-works" sx={{ py: { xs: 6 }, width: '100%' }}>
         <Container maxWidth="xl" sx={{ px: { xs: 2.5, sm: 4, md: 6, lg: 8 } }}>
 
           <Box sx={{ textAlign: 'center', maxWidth: '780px', mx: 'auto', mb: 5.5 }}>
@@ -1619,44 +1649,56 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       {/* 6. YOUR PRIVACY MATTERS DEEPLY (3 PILLAR CARDS IN A ROW) */}
       <Box
         sx={{
-          py: { xs: 7, md: 9 },
+          py: { xs: 6 },
+          px: { xs: 2, sm: 4, md: 6 },
         }}
+        id="promises"
       >
         {/* Section heading */}
-        <Box sx={{ mb: 4 }}>
-          <Typography
+        <Box sx={{ textAlign: 'center' }}>
+          <Box
             sx={{
-              fontFamily: 'Georgia, serif',
-              fontWeight: 700,
-              fontSize: {
-                xs: '2rem',
-                md: '2.6rem',
-              },
-              textAlign:"center",
-              lineHeight: 1.15,
-              color: '#7A2945',
+              display: 'inline-block',
+              px: 2,
+              py: 0.5,
+              borderRadius: '99px',
+              bgcolor: '#f3e8ff',
+              color: '#6b21a8',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              letterSpacing: '1px',
+              textTransform: 'uppercase',
+              mb: 1.5,
             }}
           >
-            Our Promises to Every Client
+            Our Promises
+          </Box>
+          <Typography variant="h2" sx={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: { xs: '2rem', sm: '2.5rem' }, textAlign: "center", color: '#1e1b4b', letterSpacing: '-0.8px', mb: 1.5 }}>
+            We’ll be here when you need support
           </Typography>
+          <Typography sx={{ fontSize: '0.98rem', color: '#64748b' }}>
+            We want to earn your trust, so here’s what you can expect from us.          </Typography>
         </Box>
 
         {/* Promise cards */}
         <Box
           sx={{
             display: 'grid',
-            padding:"50px",
+            paddingTop: "25px",
+            paddingLeft: { xs: "5px", sm: "50px" },
+            paddingRight: { xs: "5px", sm: "50px" },
+            paddingBottom: "25px",
             gridTemplateColumns: {
               xs: '1fr',
               sm: 'repeat(2, 1fr)',
               lg: 'repeat(3, 1fr)',
+              xl: 'repeat(6, 1fr)',
             },
             gap: 2,
           }}
         >
           {PROMISES.map((promise, index) => {
             const Icon = promise.icon;
-
             return (
               <Box
                 key={promise.title}
@@ -1756,9 +1798,10 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       {/* 7. Clusters and problems () */}
       <Box
         sx={{
-          py: { xs: 7, md: 10 },
+          py: { xs: 6 },
           bgcolor: '#FBFBFD',
         }}
+        id="seek-help"
       >
         <Container maxWidth="lg">
 
@@ -1771,34 +1814,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               mb: { xs: 4, md: 6 },
             }}
           >
-            <Chip
-              label="INTERACTIVE CARE NAVIGATOR"
-              size="small"
-              sx={{
-                mb: 1.5,
-                bgcolor: '#F4F5F8',
-                color: '#64748b',
-                fontWeight: 700,
-                fontSize: '0.62rem',
-                letterSpacing: '0.8px',
-                border: '1px solid #e5e7eb',
-              }}
-            />
-
-            <Typography
-              sx={{
-                fontFamily: 'Georgia, serif',
-                fontWeight: 700,
-                fontSize: {
-                  xs: '2rem',
-                  sm: '2.5rem',
-                  md: '3rem',
-                },
-                color: '#7A2945',
-                lineHeight: 1.15,
-                mb: 1.5,
-              }}
-            >
+            <Typography variant="h2" sx={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: { xs: '2rem', sm: '2.5rem' }, textAlign: "center", color: '#1e1b4b', letterSpacing: '-0.8px', mb: 1.5 }}>
               Find where you belong today
             </Typography>
 
@@ -1815,7 +1831,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
           </Box>
 
           {/* Main navigator */}
-          <Box
+          {/* <Box
             sx={{
               bgcolor: '#fff',
               border: '1px solid #e5e7eb',
@@ -1823,273 +1839,279 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               p: { xs: 2, sm: 3, md: 4 },
               boxShadow: '0 12px 35px rgba(15,23,42,0.05)',
             }}
+          > */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                lg: '300px 1fr',
+              },
+              gap: { xs: 3, lg: 4 },
+            }}
           >
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  lg: '300px 1fr',
-                },
-                gap: { xs: 3, lg: 4 },
-              }}
-            >
 
-              {/* LEFT — CARE GROUPS */}
-              <Stack spacing={1.25}>
-                {CARE_GROUPS.map((group, index) => {
-                  const Icon = group.icon;
-                  const selected = activeCareGroup === index;
+            {/* LEFT — CARE GROUPS */}
+            <Stack sx={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              {CARE_GROUPS.map((group, index) => {
+                const Icon = group.icon;
+                const selected = activeCareGroup === index;
 
-                  return (
+                return (
+                  <Box
+                    key={group.id}
+                    component="button"
+                    onClick={() => {
+                      setActiveCareGroup(index);
+                      setActiveConcern(0);
+                    }}
+                    sx={{
+                      width: '100%',
+                      textAlign: 'left',
+                      border: selected
+                        ? `1px solid ${group.color}`
+                        : '1px solid #edf0f3',
+                      bgcolor: selected ? '#fff' : '#fafbfc',
+                      borderRadius: '14px',
+                      p: 1.5,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      transition: 'all 0.3s ease',
+
+                      boxShadow: selected
+                        ? `0 8px 22px ${group.color}14`
+                        : 'none',
+
+                      transform: selected
+                        ? 'translateX(3px)'
+                        : 'none',
+
+                      '&:hover': {
+                        bgcolor: '#fff',
+                        borderColor: group.color,
+                        transform: 'translateX(3px)',
+                      },
+                    }}
+                  >
                     <Box
-                      key={group.id}
-                      component="button"
-                      onClick={() => {
-                        setActiveCareGroup(index);
-                        setActiveConcern(0);
-                      }}
                       sx={{
-                        width: '100%',
-                        textAlign: 'left',
-                        border: selected
-                          ? `1px solid ${group.color}`
-                          : '1px solid #edf0f3',
-                        bgcolor: selected ? '#fff' : '#fafbfc',
-                        borderRadius: '14px',
-                        p: 1.5,
-                        cursor: 'pointer',
+                        width: 42,
+                        height: 42,
+                        flexShrink: 0,
+                        borderRadius: '12px',
+                        bgcolor: selected
+                          ? group.color
+                          : group.lightBg,
+                        color: selected
+                          ? '#fff'
+                          : group.color,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 1.5,
+                        justifyContent: 'center',
                         transition: 'all 0.3s ease',
+                      }}
+                    >
+                      <Icon sx={{ fontSize: 22 }} />
+                    </Box>
 
-                        boxShadow: selected
-                          ? `0 8px 22px ${group.color}14`
-                          : 'none',
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography
+                        sx={{
+                          fontSize: '0.62rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.8px',
+                          textTransform: 'uppercase',
+                          color: '#94a3b8',
+                          mb: 0.25,
+                        }}
+                      >
+                        {group.category}
+                      </Typography>
 
+                      <Typography
+                        sx={{
+                          fontSize: '0.88rem',
+                          fontWeight: selected ? 800 : 600,
+                          color: '#1e293b',
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {group.title}
+                      </Typography>
+                    </Box>
+
+                    <ChevronRightRoundedIcon
+                      sx={{
+                        fontSize: 20,
+                        color: selected
+                          ? group.color
+                          : '#cbd5e1',
+                        transition: 'all 0.3s ease',
                         transform: selected
                           ? 'translateX(3px)'
                           : 'none',
+                      }}
+                    />
+                  </Box>
+                );
+              })}
+            </Stack>
 
-                        '&:hover': {
-                          bgcolor: '#fff',
-                          borderColor: group.color,
-                          transform: 'translateX(3px)',
-                        },
+            {/* RIGHT — CONCERN CAROUSEL */}
+            {(() => {
+              const group = CARE_GROUPS[activeCareGroup];
+              const concern = group.concerns[activeConcern];
+              const Icon = group.icon;
+
+              return (
+                <Box
+                  key={`${group.id}-${activeConcern}`}
+                  sx={{
+                    borderRadius: '18px',
+                    bgcolor: group.lightBg,
+                    border: `1px solid ${group.color}22`,
+                    p: { xs: 2.5, sm: 3.5 },
+                    minHeight: { lg: 430 },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+
+                    animation: 'carePanelIn 0.35s ease both',
+
+                    '@keyframes carePanelIn': {
+                      from: {
+                        opacity: 0,
+                        transform: 'translateY(8px)',
+                      },
+                      to: {
+                        opacity: 1,
+                        transform: 'translateY(0)',
+                      },
+                    },
+                  }}
+                >
+
+                  {/* Panel header */}
+                  <Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 2,
+                        mb: 3,
                       }}
                     >
                       <Box
                         sx={{
-                          width: 42,
-                          height: 42,
-                          flexShrink: 0,
-                          borderRadius: '12px',
-                          bgcolor: selected
-                            ? group.color
-                            : group.lightBg,
-                          color: selected
-                            ? '#fff'
-                            : group.color,
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.3s ease',
+                          gap: 1.75,
                         }}
                       >
-                        <Icon sx={{ fontSize: 22 }} />
-                      </Box>
-
-                      <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography
-                          sx={{
-                            fontSize: '0.62rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.8px',
-                            textTransform: 'uppercase',
-                            color: '#94a3b8',
-                            mb: 0.25,
-                          }}
-                        >
-                          {group.category}
-                        </Typography>
-
-                        <Typography
-                          sx={{
-                            fontSize: '0.88rem',
-                            fontWeight: selected ? 800 : 600,
-                            color: '#1e293b',
-                            lineHeight: 1.3,
-                          }}
-                        >
-                          {group.title}
-                        </Typography>
-                      </Box>
-
-                      <ChevronRightRoundedIcon
-                        sx={{
-                          fontSize: 20,
-                          color: selected
-                            ? group.color
-                            : '#cbd5e1',
-                          transition: 'all 0.3s ease',
-                          transform: selected
-                            ? 'translateX(3px)'
-                            : 'none',
-                        }}
-                      />
-                    </Box>
-                  );
-                })}
-              </Stack>
-
-              {/* RIGHT — CONCERN CAROUSEL */}
-              {(() => {
-                const group = CARE_GROUPS[activeCareGroup];
-                const concern = group.concerns[activeConcern];
-                const Icon = group.icon;
-
-                return (
-                  <Box
-                    key={`${group.id}-${activeConcern}`}
-                    sx={{
-                      borderRadius: '18px',
-                      bgcolor: group.lightBg,
-                      border: `1px solid ${group.color}22`,
-                      p: { xs: 2.5, sm: 3.5 },
-                      minHeight: { lg: 430 },
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-
-                      animation: 'carePanelIn 0.35s ease both',
-
-                      '@keyframes carePanelIn': {
-                        from: {
-                          opacity: 0,
-                          transform: 'translateY(8px)',
-                        },
-                        to: {
-                          opacity: 1,
-                          transform: 'translateY(0)',
-                        },
-                      },
-                    }}
-                  >
-
-                    {/* Panel header */}
-                    <Box>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 2,
-                          mb: 3,
-                        }}
-                      >
+                        {/* Cluster code */}
                         <Box
                           sx={{
+                            width: 58,
+                            height: 58,
+                            borderRadius: '14px',
+                            bgcolor: group.color,
+                            color: '#fff',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 1.75,
+                            justifyContent: 'center',
+                            flexShrink: 0,
                           }}
                         >
-                          {/* Cluster code */}
                           <Box
                             sx={{
                               width: 58,
                               height: 58,
                               borderRadius: '14px',
                               bgcolor: group.color,
-                              color: '#fff',
+                              color: group.lightBg,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               flexShrink: 0,
                             }}
                           >
-                            <Typography
-                              sx={{
-                                fontSize: '1.05rem',
-                                fontWeight: 900,
-                                letterSpacing: '-0.5px',
-                              }}
-                            >
-                              {concern.code}
-                            </Typography>
+                            <group.icon sx={{ fontSize: 30 }} />
                           </Box>
-
-                          {/* Cluster name */}
-                          <Typography
-                            sx={{
-                              fontSize: {
-                                xs: '1.25rem',
-                                sm: '1.6rem',
-                              },
-                              fontWeight: 800,
-                              color: '#172033',
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {concern.title}
-                          </Typography>
                         </Box>
 
-                        {/* Carousel controls */}
-                        <Box
+                        {/* Cluster name */}
+                        <Typography
                           sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
+                            fontSize: {
+                              xs: '1.25rem',
+                              sm: '1.6rem',
+                            },
+                            fontWeight: 800,
+                            color: '#172033',
+                            lineHeight: 1.2,
                           }}
                         >
-                          <IconButton
-                            disabled={activeConcern === 0}
-                            onClick={() =>
-                              setActiveConcern((prev) => prev - 1)
-                            }
-                            sx={{
-                              width: 34,
-                              height: 34,
-                              bgcolor: '#fff',
-                              border: '1px solid #e2e8f0',
-                            }}
-                          >
-                            <ChevronLeftRoundedIcon />
-                          </IconButton>
-
-                          <IconButton
-                            disabled={
-                              activeConcern ===
-                              group.concerns.length - 1
-                            }
-                            onClick={() =>
-                              setActiveConcern((prev) => prev + 1)
-                            }
-                            sx={{
-                              width: 34,
-                              height: 34,
-                              bgcolor: '#fff',
-                              border: '1px solid #e2e8f0',
-                            }}
-                          >
-                            <ChevronRightRoundedIcon />
-                          </IconButton>
-                        </Box>
+                          {concern.title}
+                        </Typography>
                       </Box>
 
-                      {/* Concern */}
-                      <Card
-                        elevation={0}
+                      {/* Carousel controls */}
+                      <Box
                         sx={{
-                          bgcolor: '#fff',
-                          borderRadius: '15px',
-                          border: '1px solid #e8ebef',
-                          p: { xs: 2.5, sm: 3 },
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
                         }}
                       >
-                        {/* <Typography
+                        <IconButton
+                          disabled={activeConcern === 0}
+                          onClick={() =>
+                            setActiveConcern((prev) => prev - 1)
+                          }
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            bgcolor: '#fff',
+                            border: '1px solid #e2e8f0',
+                          }}
+                        >
+                          <ChevronLeftRoundedIcon />
+                        </IconButton>
+
+                        <IconButton
+                          disabled={
+                            activeConcern ===
+                            group.concerns.length - 1
+                          }
+                          onClick={() =>
+                            setActiveConcern((prev) => prev + 1)
+                          }
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            bgcolor: '#fff',
+                            border: '1px solid #e2e8f0',
+                          }}
+                        >
+                          <ChevronRightRoundedIcon />
+                        </IconButton>
+                      </Box>
+                    </Box>
+
+                    {/* Concern */}
+                    <Card
+                      elevation={0}
+                      sx={{
+                        bgcolor: '#fff',
+                        borderRadius: '15px',
+                        border: '1px solid #e8ebef',
+                        p: { xs: 2.5, sm: 3 },
+                      }}
+                    >
+                      {/* <Typography
                           sx={{
                             fontSize: {
                               xs: '1.2rem',
@@ -2104,107 +2126,107 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                           {concern.title}
                         </Typography> */}
 
-                        <Typography
-                          sx={{
-                            fontSize: '0.66rem',
-                            fontWeight: 800,
-                            color: '#94a3b8',
-                            letterSpacing: '0.8px',
-                            textTransform: 'uppercase',
-                            mb: 1.25,
-                          }}
-                        >
-                          You might be experiencing
-                        </Typography>
-
-                        <Stack spacing={1}>
-                          {concern.points.map((point) => (
-                            <Box
-                              key={point}
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  width: 7,
-                                  height: 7,
-                                  borderRadius: '50%',
-                                  bgcolor: group.color,
-                                  flexShrink: 0,
-                                }}
-                              />
-
-                              <Typography
-                                sx={{
-                                  fontSize: '0.84rem',
-                                  color: '#475569',
-                                }}
-                              >
-                                {point}
-                              </Typography>
-                            </Box>
-                          ))}
-                        </Stack>
-                      </Card>
-                    </Box>
-
-                    {/* Bottom */}
-                    <Box
-                      sx={{
-                        mt: 3,
-                        pt: 2.5,
-                        borderTop: `1px solid ${group.color}18`,
-                        display: 'flex',
-                        alignItems: {
-                          xs: 'flex-start',
-                          sm: 'center',
-                        },
-                        justifyContent: 'space-between',
-                        flexDirection: {
-                          xs: 'column',
-                          sm: 'row',
-                        },
-                        gap: 2,
-                      }}
-                    >
                       <Typography
                         sx={{
-                          fontSize: '0.75rem',
-                          color: '#64748b',
-                          maxWidth: 390,
-                          lineHeight: 1.5,
+                          fontSize: '0.66rem',
+                          fontWeight: 800,
+                          color: '#94a3b8',
+                          letterSpacing: '0.8px',
+                          textTransform: 'uppercase',
+                          mb: 1.25,
                         }}
                       >
-                        No one should have to carry their pain alone. You are not alone, and support is here when you are ready to take the first step towards healing.
+                        You might be experiencing
                       </Typography>
 
-                      <Button
-                        variant='text'
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.75,
-                          color: group.color,
-                          fontSize: '0.78rem',
-                          fontWeight: 800,
-                          whiteSpace: 'nowrap',
-                        }}
-                        onClick={() => navigate("/register")}
-                      >
-                        Explore support
-                        <ArrowForwardRoundedIcon sx={{ fontSize: 17 }} />
-                      </Button>
-                    </Box>
+                      <Stack spacing={1}>
+                        {concern.points.map((point) => (
+                          <Box
+                            key={point}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: '50%',
+                                bgcolor: group.color,
+                                flexShrink: 0,
+                              }}
+                            />
+
+                            <Typography
+                              sx={{
+                                fontSize: '0.84rem',
+                                color: '#475569',
+                              }}
+                            >
+                              {point}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Card>
                   </Box>
-                );
-              })()}
-            </Box>
+
+                  {/* Bottom */}
+                  <Box
+                    sx={{
+                      mt: 3,
+                      pt: 2.5,
+                      borderTop: `1px solid ${group.color}18`,
+                      display: 'flex',
+                      alignItems: {
+                        xs: 'flex-start',
+                        sm: 'center',
+                      },
+                      justifyContent: 'space-between',
+                      flexDirection: {
+                        xs: 'column',
+                        sm: 'row',
+                      },
+                      gap: 2,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '0.75rem',
+                        color: '#64748b',
+                        maxWidth: 390,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      No one should have to carry their pain alone. You are not alone, and support is here when you are ready to take the first step towards healing.
+                    </Typography>
+
+                    <Button
+                      variant='text'
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        color: group.color,
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        whiteSpace: 'nowrap',
+                      }}
+                      onClick={() => navigate("/register")}
+                    >
+                      Explore support
+                      <ArrowForwardRoundedIcon sx={{ fontSize: 17 }} />
+                    </Button>
+                  </Box>
+                </Box>
+              );
+            })()}
+            {/* </Box> */}
 
             {/* Reassurance */}
-            <Box
+            {/* <Box
               sx={{
                 mt: 3,
                 pt: 2.5,
@@ -2244,14 +2266,14 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               >
                 Private • Online & In-Person
               </Typography>
-            </Box>
+            </Box> */}
           </Box>
         </Container>
       </Box>
 
       {/* 8. FREQUENTLY ASKED QUESTIONS (ROW-WISE 2 ELEMENTS: LEFT HELP BOX + RIGHT ACCORDION LIST) */}
-      <Box id="faqs" sx={{ py: { xs: 6, md: 8 }, width: '100%' }}>
-        <Container maxWidth="xl" sx={{ px: { xs: 2.5, sm: 4, md: 6, lg: 8 } }}>
+      <Box id="faqs" sx={{ py: { xs: 6 }, width: '100%' }}>
+        <Container maxWidth="xl" sx={{ px: { xs: 2.5, sm: 4, md: 6 } }}>
           <Box
             sx={{
               display: 'grid',
@@ -2262,23 +2284,6 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
           >
             {/* Left Column: Heading & Support Callout Card */}
             <Box>
-              <Box
-                sx={{
-                  display: 'inline-block',
-                  px: 2,
-                  py: 0.5,
-                  borderRadius: '99px',
-                  bgcolor: '#f3e8ff',
-                  color: '#6b21a8',
-                  fontSize: '0.76rem',
-                  fontWeight: 800,
-                  letterSpacing: '1px',
-                  textTransform: 'uppercase',
-                  mb: 1.5,
-                }}
-              >
-                ANSWERS & SUPPORT
-              </Box>
               <Typography variant="h2" sx={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: { xs: '2rem', sm: '2.5rem' }, color: '#1e1b4b', letterSpacing: '-0.8px', mb: 2 }}>
                 Frequently Asked Questions
               </Typography>
@@ -2349,7 +2354,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
             </Box>
 
             {/* Right Column: Accordion FAQ List */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: "space-between", gap: 1 }}>
               {FAQS.map((faq, idx) => (
                 <Accordion
                   key={idx}
@@ -2357,7 +2362,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                   onChange={handleFaqChange(`panel${idx}`)}
                   elevation={0}
                   sx={{
-                    borderRadius: '18px !important',
+                    borderRadius: '8px !important',
                     border: '1.5px solid #e2e8f0',
                     bgcolor: '#ffffff',
                     '&:before': { display: 'none' },
@@ -2370,7 +2375,6 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                 >
                   <AccordionSummary
                     expandIcon={<ExpandMoreIcon sx={{ color: '#4c3b71' }} />}
-                    sx={{ px: 3, py: 1 }}
                   >
                     <Typography sx={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.02rem', color: '#1e1b4b' }}>
                       {faq.q}
@@ -2389,17 +2393,17 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       </Box>
 
       {/* 9. BOTTOM CTA BANNER */}
-      <Box sx={{ py: { xs: 6, md: 8 }, width: '100%' }}>
-        <Container maxWidth="xl" sx={{ px: { xs: 1.5, sm: 2, md: 4, lg: 6 } }}>
+      <Box sx={{ py: { xs: 2 }, width: '100%' }}>
+        <Container maxWidth="xl" sx={{ px: { xs: 1.5, sm: 2 } }}>
           <Box
             sx={{
-              borderRadius: '32px',
+              borderRadius: '24px',
               color: '#ffffff',
-              p: { xs: 4, sm: 6, md: 8 },
+              p: { xs: 4, sm: 6 },
               position: 'relative',
               overflow: 'hidden',
               boxShadow: '0 25px 60px rgba(76, 59, 113, 0.3)',
-              background: 'linear-gradient(135deg, #4c3b71 0%, #1e1b4b 100%)',
+              background: 'linear-gradient(135deg, #8774b1 0%, #4f49a4 100%)',
             }}
           >
             {/* Concentric rings watermark */}
@@ -2430,7 +2434,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
 
             <Box sx={{ position: 'relative', zIndex: 1, maxWidth: '680px' }}>
 
-              <Typography variant="h3" sx={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: { xs: '1.9rem', sm: '2.5rem' }, mb: 2, lineHeight: 1.2 }}>
+              <Typography variant="h3" sx={{ fontFamily: 'Outfit', fontWeight: 600, fontSize: { xs: '1.9rem', sm: '2.5rem' }, mb: 2, lineHeight: 1.2 }}>
                 Ready to take the gentle first step?
               </Typography>
 
@@ -2492,8 +2496,8 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       </Box>
 
       {/* 10. FOOTER */}
-      <Box sx={{ bgcolor: '#ffffff', color: '#64748b', pt: { xs: 6, md: 7 }, pb: 4, width: '100%', borderTop: '1px solid #e2e8f0' }}>
-        <Container maxWidth="xl" sx={{ px: { xs: 2.5, sm: 4, md: 6, lg: 8 } }}>
+      <Box sx={{ bgcolor: '#ffffff', color: '#64748b', pt: { xs: 4 }, pb: 4, width: '100%', borderTop: '1px solid #e2e8f0' }}>
+        <Container maxWidth="xl" sx={{ px: { xs: 2.5, sm: 4 } }}>
           <Box
             sx={{
               display: 'flex',
@@ -2501,12 +2505,11 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               justifyContent: 'space-between',
               alignItems: { xs: 'flex-start', md: 'center' },
               gap: 4,
-              mb: 4,
             }}
           >
             {/* Brand Logo & Mission */}
             <Box sx={{ maxWidth: '520px' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
                 <Box
                   sx={{
                     width: 36,
@@ -2534,22 +2537,12 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 2, sm: 3 }, fontSize: '0.88rem', fontWeight: 600 }}>
               <Box component={Link} to="/" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>Home</Box>
               <Box component="a" href="#how-it-works" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>How it Works</Box>
-              <Box component="a" href="#counselling-types" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>Counselling</Box>
+              <Box component="a" href="#promises" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>Our Promise</Box>
+              <Box component="a" href="#seek-help" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>Seek Help</Box>
               <Box component="a" href="#faqs" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>FAQs</Box>
               {/* <Box component="a" href="#faqs" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>Privacy Policy</Box>
               <Box component="a" href="#faqs" sx={{ color: '#475569', textDecoration: 'none', '&:hover': { color: '#1e1b4b' } }}>Terms of Service</Box> */}
             </Box>
-          </Box>
-
-          <Divider sx={{ borderColor: '#e2e8f0', mb: 3 }} />
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
-            <Typography sx={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              🔒 100% HIPAA & GDPR Compliant Confidential Care
-            </Typography>
-            <Typography sx={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              © 2026 All rights reserved.
-            </Typography>
           </Box>
         </Container>
       </Box>

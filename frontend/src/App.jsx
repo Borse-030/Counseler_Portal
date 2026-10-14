@@ -295,10 +295,14 @@ function AppContent() {
       <AppBar
         position="sticky"
         elevation={0}
+        className='glass-navbar'
         sx={{
-          bgcolor: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid #e2e8f0',
+          background: "rgba(255, 255, 255, 0.52)",
+          backdropFilter: "blur(12px) saturate(140%)",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.55)",
+          boxShadow:"0 4px 20px rgba(15, 23, 42, 0.04)",
+          // transition:"background 200ms ease, boxShadow 200ms ease",
+          // -webkit-backdrop-filter: blur(16px) saturate(140%);
           color: '#0f172a',
         }}
       >
