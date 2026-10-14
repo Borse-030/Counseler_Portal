@@ -40,6 +40,12 @@ const AppointmentSchema = new mongoose.Schema({
   clinicAddress: { type: String, default: '' },
   intakeNotes: { type: String, default: '' },
   sessionNotes: { type: String, default: '' },
+  counselorTransferHistory: { type: [new mongoose.Schema({
+    fromCounselorId: String, fromCounselorName: String, toCounselorId: String, toCounselorName: String,
+    previousDate: String, previousTime: String, date: String, time: String,
+    previousMeetingLink: String, meetingLink: String,
+    actorId: String, actorName: String, at: { type: Date, default: Date.now },
+  }, { _id: false })], default: [] },
   scheduleHistory: { type: [new mongoose.Schema({
     previous: { date: String, time: String, duration: Number, appointmentType: String, meetingLink: String },
     next: { date: String, time: String, duration: Number, appointmentType: String, meetingLink: String },

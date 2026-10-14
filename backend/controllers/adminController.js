@@ -2,6 +2,23 @@ import { User, Transaction, Appointment, Availability, AppointmentType } from '.
 import { db } from '../db.js';
 import { sendNotification } from '../utils/notificationService.js';
 import { accountStatusNotification } from '../utils/notificationService.js';
+import { CareRequest } from '../models/index.js';
+import { reviewCounselorDeactivation, checkCounselorTransfers, transferAndDeactivateCounselor } from '../utils/counselorDeactivationService.js';
+
+const transferResponse = (res, error) => res.status(error.status || 500).json({ message: error.message || 'Unable to transfer pending work.', ...error.details });
+export const getCounselorDeactivationReview = async (req, res) => {
+  try { res.json(await reviewCounselorDeactivation(req.params.id)); } catch (error) { transferResponse(res, error); }
+};
+export const checkCounselorDeactivationTransfers = async (req, res) => {
+  try { res.json(await checkCounselorTransfers(req.params.id, req.body)); } catch (error) { transferResponse(res, error); }
+};
+export const deactivateCounselorWithTransfers = async (req, res) => {
+  try {
+    const actor = await User.findOne({ id: req.userId, role: 'admin', suspended: { $ne: true } });
+    if (!actor) return res.status(403).json({ message: 'Active admin access required.' });
+    res.json(await transferAndDeactivateCounselor(req.params.id, req.body, actor));
+  } catch (error) { transferResponse(res, error); }
+};
 
 export const getUsers = async (req, res) => {
   try {
@@ -33,11 +50,20 @@ export const getUsers = async (req, res) => {
 
 export const updateUserStatus = async (req, res) => {
   const { approved, suspended } = req.body;
+  if ((approved !== undefined && typeof approved !== 'boolean') || (suspended !== undefined && typeof suspended !== 'boolean')) return res.status(400).json({ message: 'Account status values must be true or false.' });
   try {
     const user = await User.findOne({ id: req.params.id });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role === 'counselor' && suspended === true) {
+      const [pending, activeCases] = await Promise.all([
+        Appointment.exists({ counselorId: user.id, status: { $in: ['upcoming', 'pending_admin'] } }),
+        CareRequest.exists({ status: { $nin: ['closed', 'completed', 'rejected'] }, $or: [{ finalCounselorId: user.id }, { assignedCounselorId: user.id }] }),
+      ]);
+      if (pending || activeCases) return res.status(409).json({ message: 'Review and transfer pending sessions and active cases before deactivating this counselor.' });
     }
 
     if (approved !== undefined) {

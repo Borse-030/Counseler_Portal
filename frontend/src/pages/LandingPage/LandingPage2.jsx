@@ -865,7 +865,6 @@ const LandingPage = () => {
 								gap: { xs: 2.5, md: 4 },
 								flexWrap: "wrap",
 								mt: { xs: 3, md: 0 },
-								display:"flex",
 								justifyContent:{xs:"center", sm:"left"},
 							}}
 						>

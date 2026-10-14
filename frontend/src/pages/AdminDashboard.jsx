@@ -3,6 +3,7 @@ import { hasFeedback } from '../utils/sessionOutcome';
 import AdminScheduleSession from '../components/AdminScheduleSession';
 import DiscoveryCallEditor from '../components/DiscoveryCallEditor';
 import DiscoveryPlanSummary from '../components/DiscoveryPlanSummary';
+import CounselorDeactivationDialog from '../components/CounselorDeactivationDialog';
 import EditScheduledSession from '../components/EditScheduledSession';
 import { canEditScheduledSession } from '../utils/sessionScheduling';
 import SessionOverview from '../components/SessionOverview';
@@ -137,7 +138,7 @@ export default function AdminDashboard({ currentUser }) {
   const [createCounselorOpen, setCreateCounselorOpen] = useState(false)
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [, setDeactivateUser] = useState(null);
+  const [deactivateUser, setDeactivateUser] = useState(null);
 
   const navigate = useNavigate()
 
@@ -229,6 +230,8 @@ export default function AdminDashboard({ currentUser }) {
 
   // Handle User suspension toggle
   const handleToggleSuspension = async (userId, currentSuspension) => {
+    const user = users.find(item => item.id === userId);
+    if (!currentSuspension && user?.role === 'counselor') { setDeactivateUser(user); return; }
     try {
       setError('');
       setSuccess('');
@@ -507,6 +510,10 @@ export default function AdminDashboard({ currentUser }) {
         <DialogActions><Button disabled={decisionBusy} onClick={() => setDecisionRequest(null)}>Cancel</Button><Button color="error" variant="contained" disabled={decisionBusy || !decisionReason.trim()} onClick={() => decideRegistration('rejected')}>{decisionBusy ? 'Saving…' : 'Reject request'}</Button></DialogActions>
       </Dialog>
 
+
+      {deactivateUser?.role === 'counselor' && <CounselorDeactivationDialog key={deactivateUser.id} counselor={deactivateUser} onClose={() => setDeactivateUser(null)} onComplete={result => {
+        setDeactivateUser(null); setSuccess(result.message); void fetchAdminData();
+      }} />}
 
       {/* Create User Dialog Modal */}
 

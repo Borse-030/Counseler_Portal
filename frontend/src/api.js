@@ -304,6 +304,9 @@ export const api = {
   },
 
   // Admin API
+  getCounselorDeactivationReview: id => request(`/admin/users/${id}/deactivation-review`),
+  checkCounselorTransfers: (id, data) => request(`/admin/users/${id}/deactivation-check`, { method: 'POST', body: JSON.stringify(data) }),
+  transferAndDeactivateCounselor: (id, data) => request(`/admin/users/${id}/transfer-and-deactivate`, { method: 'POST', body: JSON.stringify(data) }),
   getAdminUsers: async () => {
     return request('/admin/users');
   },

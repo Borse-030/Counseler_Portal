@@ -18,7 +18,7 @@ export const validateSchedule = async (counselorId, date, time, duration = 60, e
   const scheduled = new Date(`${date}T${time}:00+05:30`);
   const hoursAhead = (scheduled - new Date()) / 3600000;
   if (hoursAhead <= 0) return 'The call or session must be in the future.';
-  const counselor = await User.findOne({ id: counselorId, role: 'counselor', approved: true, suspended: { $ne: true } });
+  const counselor = await User.findOne({ id: counselorId, role: 'counselor', approved: true, suspended: { $ne: true }, $or: [{ deactivationLockUntil: null }, { deactivationLockUntil: { $lte: new Date() } }] });
   if (!counselor) return 'The counselor is not active.';
   if (await Exception.findOne({ counselorId, date })) return 'The counselor is unavailable on this date.';
   const availability = await Availability.findOne({ counselorId }) || { workingDays: [1, 2, 3, 4, 5], startHour: '09:00', endHour: '17:00' };

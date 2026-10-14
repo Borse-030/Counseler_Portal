@@ -11,7 +11,8 @@ const projectId = createHash('sha256').update(projectPath).digest('hex').slice(0
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  // Keep WSL's dependency cache off Windows mounts, where renames can fail.
+  // Linux dependency caches stay off Windows mounts. WSL 1 dev uses Windows
+  // Node via scripts/dev.mjs, where Vite's Windows rename handling applies.
   cacheDir: isWslMountedProject
     ? join(tmpdir(), `counselor-vite-${projectId}-vite7`)
     : 'node_modules/.vite',

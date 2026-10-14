@@ -32,6 +32,8 @@ const UserSchema = new mongoose.Schema({
   certificates: { type: String, default: '' },
   languages: { type: [String], default: ['English'] },
   suspended: { type: Boolean, default: false },
+  deactivationLockUntil: { type: Date },
+  deactivationLockToken: { type: String, select: false },
   createdAt: { type: Date, default: Date.now }
 });
 

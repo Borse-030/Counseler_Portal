@@ -2,6 +2,9 @@ import express from 'express';
 import {
   getUsers,
   updateUserStatus,
+  getCounselorDeactivationReview,
+  checkCounselorDeactivationTransfers,
+  deactivateCounselorWithTransfers,
   getTransactions,
   getStats,
   createUser,
@@ -20,7 +23,7 @@ const authenticateAdmin = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
   try {
     const userId = getUserIdFromToken(token);
-    const user = await User.findOne({ id: userId });
+    const user = await User.findOne({ id: userId, suspended: { $ne: true } });
 
     if (!user || user.role !== 'admin') {
       return res.status(403).json({ message: 'Forbidden. Admin privileges required.' });
@@ -35,6 +38,9 @@ const authenticateAdmin = async (req, res, next) => {
 
 router.get('/users', authenticateAdmin, getUsers);
 router.put('/users/:id/status', authenticateAdmin, updateUserStatus);
+router.get('/users/:id/deactivation-review', authenticateAdmin, getCounselorDeactivationReview);
+router.post('/users/:id/deactivation-check', authenticateAdmin, checkCounselorDeactivationTransfers);
+router.post('/users/:id/transfer-and-deactivate', authenticateAdmin, deactivateCounselorWithTransfers);
 router.get('/transactions', authenticateAdmin, getTransactions);
 router.get('/stats', authenticateAdmin, getStats);
 router.post('/users', authenticateAdmin, createUser);
