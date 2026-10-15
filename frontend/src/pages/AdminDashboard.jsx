@@ -1,6 +1,9 @@
 import { mergeRescheduleResult, pendingReschedule } from '../utils/rescheduling';
 import { hasFeedback } from '../utils/sessionOutcome';
 import AdminScheduleSession from '../components/AdminScheduleSession';
+import AdminSidebar from '../components/AdminSidebar';
+import AdminOverview, { AdminOverviewDate } from '../components/AdminOverview';
+import AdminRegistrationEmptyState from '../components/AdminRegistrationEmptyState';
 import DiscoveryCallEditor from '../components/DiscoveryCallEditor';
 import DiscoveryPlanSummary from '../components/DiscoveryPlanSummary';
 import CounselorDeactivationDialog from '../components/CounselorDeactivationDialog';
@@ -11,7 +14,7 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Container, Typography, Grid, Card, CardContent, CardActionArea, Avatar, Button, Tabs, Tab,
+  Box, Typography, Grid, Card, CardContent, Avatar, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Chip, CircularProgress, Alert, TextField, IconButton, Dialog, DialogTitle, Stack,
   DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Drawer, Divider, Tooltip
@@ -33,6 +36,8 @@ import AddIcon from '@mui/icons-material/Add';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import SearchIcon from '@mui/icons-material/Search';
+import MenuIcon from '@mui/icons-material/Menu';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import CloseIcon from '@mui/icons-material/Close';
 import { api } from '../api';
 import { getScheduledSession } from '../utils/scheduledSession';
@@ -154,7 +159,9 @@ function AccountList({ users, onToggle, onDeactivate, onSelectCase, showCounselo
 }
 
 export default function AdminDashboard({ currentUser }) {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(6);
+  const [sessionView, setSessionView] = useState('all');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [appointments, setAppointments] = useState([]);
   useEffect(() => {
@@ -319,19 +326,29 @@ export default function AdminDashboard({ currentUser }) {
   const approvedCount = users.filter(u => ['user', 'patient'].includes(u.role) && u.approved && !u.suspended).length;
   const counselorCount = users.filter(u => u.role === 'counselor' && u.approved && !u.suspended).length;
   const archivedCount = users.filter(u => u.suspended).length;
+  const rescheduleCount = appointments.filter(pendingReschedule).length;
   const sections = [
-    { label: 'Registration requests', count: pendingRegistrations, description: 'New applications awaiting review', icon: PeopleAltIcon, color: 'warning.main' },
-    { label: 'Approved users', count: approvedCount, description: 'Approved patients in ongoing care', icon: CheckIcon, color: 'success.main' },
-    { label: 'Counselors', count: counselorCount, description: 'Active counseling panel', icon: PsychologyOutlinedIcon, color: 'primary.main' },
-    { label: 'Discovery & assignment', count: discoveryPending + assignmentPending, description: `${discoveryPending} pending · ${assignmentPending} ready to assign`, icon: HeadsetMicOutlinedIcon, color: 'secondary.main' },
-    { label: 'Deactivated accounts', count: archivedCount, description: 'Patient and counselor archive', icon: Inventory2OutlinedIcon, color: 'text.secondary' },
+    { id: 6, label: 'Workspace overview', navLabel: 'Overview', description: 'A quick look at your program, pending work, and upcoming sessions.', icon: DashboardIcon },
+    { id: 0, label: 'Registration requests', navLabel: 'Registrations', count: pendingRegistrations, description: 'Review new applications and approve users for care.', icon: PeopleAltIcon },
+    { id: 1, label: 'Approved users', navLabel: 'Users', count: approvedCount, description: 'Manage user cases, counselor assignments, and upcoming sessions.', icon: PersonIcon },
+    { id: 2, label: 'Counselors', count: counselorCount, description: 'Manage your counseling panel and ongoing case assignments.', icon: PsychologyOutlinedIcon },
+    { id: 3, label: 'Discovery & assignment', navLabel: 'Discovery calls', count: discoveryPending + assignmentPending, description: 'Record discovery conversations and match users with a counselor.', icon: HeadsetMicOutlinedIcon },
+    { id: 5, label: 'Sessions & feedback', count: rescheduleCount, description: 'Review sessions, attendance, feedback, and rescheduling requests.', icon: CalendarMonthOutlinedIcon },
+    { id: 4, label: 'Deactivated accounts', navLabel: 'Deactivated', count: archivedCount, description: 'Review archived accounts and reactivate them when needed.', icon: Inventory2OutlinedIcon },
   ];
+  const currentSection = sections.find(section => section.id === activeTab) || sections[0];
   const selectSection = value => {
     setActiveTab(value);
+    setSessionView('all');
     setUserQuery('');
     setRequestQuery('');
     setDiscoveryFilter('all');
     setArchiveFilter('all');
+  };
+  const openOverviewSection = (section, filter) => {
+    selectSection(section);
+    if (section === 5 && filter) setSessionView(filter);
+    if (section === 3 && filter) setDiscoveryFilter(filter);
   };
   const registrationRequests = careRequests.filter(request => ['submitted', 'assigned'].includes(request.status)).filter(request => {
     const user = users.find(candidate => candidate.id === request.patientId);
@@ -393,61 +410,36 @@ export default function AdminDashboard({ currentUser }) {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: { xs: 2.5, md: 3 }, px: { xs: 2, md: 3 }, '& .MuiButton-root': { borderRadius: 1.5 } }}>
-      <Box sx={{ mb: 2.5, pb: 2.5, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1.25, mb: 0.75 }}>
-            <Typography variant="h4" sx={{ fontSize: { xs: 24, md: 28 }, fontWeight: 750, letterSpacing: '-0.035em' }}>Counseling operations</Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">Review registrations, record discovery notes, and coordinate counseling sessions.</Typography>
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', minHeight: 'calc(100dvh - 70px)', bgcolor: '#f7f9fc', '& .MuiButton-root': { borderRadius: 1.5 } }}>
+      <AdminSidebar sections={sections} activeSection={activeTab} onSelect={selectSection} mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+      <Box component="main" sx={{ flex: 1, minWidth: 0, px: { xs: 2, sm: 3, lg: 4 }, py: { xs: 2.5, md: activeTab === 6 ? 3 : 4 }, maxWidth: 1664, mx: 'auto' }}>
+      <Box sx={{ mb: activeTab === 6 ? 2 : 3.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+          <IconButton aria-label="Open admin navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} sx={{ display: { md: 'none' }, mt: .25, bgcolor: '#fff', border: '1px solid #e2e8f0' }}><MenuIcon fontSize="small" /></IconButton>
+          <Box>
+            <Typography sx={{ display: activeTab === 6 ? 'none' : 'block', color: '#94a3b8', fontSize: 10, letterSpacing: '.12em', fontWeight: 700, mb: .75 }}>CARE MANAGEMENT</Typography>
+            <Typography id="admin-section-heading" component="h1" sx={{ fontSize: { xs: 23, md: activeTab === 6 ? 24 : 28 }, fontWeight: 750, letterSpacing: '-.035em', color: '#172033', lineHeight: 1.25 }}>{currentSection.label}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: activeTab === 6 ? .5 : .75, fontSize: activeTab === 6 ? 12 : undefined, maxWidth: 600, lineHeight: 1.6 }}>{currentSection.description}</Typography>
+          </Box>
         </Box>
-        <Box sx={{ display: "flex", flexDirection: "row", gap: "10px" }}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate("/register")} sx={{ whiteSpace: 'nowrap', height: 38 }}>Create User</Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setCreateCounselorOpen(true), setCreateRole('counselor') }} sx={{ whiteSpace: 'nowrap', height: 38 }}>Create Counselor</Button>
-        </Box>
+        {activeTab === 6 && <AdminOverviewDate onRefresh={() => fetchAdminData()} />}
+        {(activeTab === 0 || activeTab === 1) && <Button variant="contained" disableElevation startIcon={<AddIcon />} onClick={() => navigate('/register')} sx={{ height: 40, px: 2, whiteSpace: 'nowrap' }}>Create user</Button>}
+        {activeTab === 2 && <Button variant="contained" disableElevation startIcon={<AddIcon />} onClick={() => { setCreateCounselorOpen(true); setCreateRole('counselor'); }} sx={{ height: 40, px: 2, whiteSpace: 'nowrap' }}>Create counselor</Button>}
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {!!appointments.filter(pendingReschedule).length && activeTab !== 5 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => selectSection(5)}>Review requests</Button>}>{appointments.filter(pendingReschedule).length} rescheduling request(s) awaiting review.</Alert>}
+      {!!appointments.filter(pendingReschedule).length && ![5, 6].includes(activeTab) && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => openOverviewSection(5, 'reschedule')}>Review requests</Button>}>{appointments.filter(pendingReschedule).length} rescheduling request(s) awaiting review.</Alert>}
       {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2 }}>{success}</Alert>}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 1.5, mb: 2.5 }}>
-        {sections.map((section, index) => {
-          const selected = activeTab === index;
-          const Icon = section.icon;
-          return <Card key={section.label} variant="outlined" sx={{ borderRadius: 2, boxShadow: selected ? '0 4px 12px rgba(49,46,129,.16)' : 'none', borderColor: selected ? 'primary.main' : 'divider', bgcolor: selected ? 'primary.main' : 'background.paper', color: selected ? 'primary.contrastText' : 'text.primary', transition: 'background-color .15s, box-shadow .15s' }}>
-            <CardActionArea onClick={() => selectSection(index)} aria-pressed={selected} aria-controls="admin-directory" sx={{ height: '100%', '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.light', outlineOffset: -3 } }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, minHeight: 130 }}>
-                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                  <Typography sx={{ fontSize: 11, fontWeight: 650, textTransform: 'uppercase', letterSpacing: '.035em', color: selected ? 'inherit' : 'text.secondary' }}>{section.label}</Typography>
-                  <Box sx={{ display: 'grid', placeItems: 'center', width: 30, height: 30, flexShrink: 0, bgcolor: selected ? 'rgba(255,255,255,.16)' : 'action.hover', color: selected ? 'inherit' : section.color, borderRadius: 1.25 }}><Icon sx={{ fontSize: 18 }} /></Box>
-                </Stack>
-                <Typography sx={{ fontSize: 30, lineHeight: 1.2, fontWeight: 750, mt: 1 }}>{section.count}</Typography>
-                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontSize: 11, color: selected ? 'inherit' : 'text.secondary', opacity: selected ? 0.85 : 1 }}>{section.description}</Typography>
-              </CardContent>
-            </CardActionArea>
-          </Card>;
-        })}
-      </Box>
-
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2.5 }}>
-        <Tabs value={activeTab} onChange={(_, value) => selectSection(value)} variant="scrollable" scrollButtons="auto" aria-label="Admin directories" sx={{ minHeight: 46, '& .MuiTab-root': { minHeight: 46, px: 2, textTransform: 'none', fontWeight: 600, fontSize: 12 } }}>
-          {sections.map((section, index) => <Tab id={`admin-tab-${index}`} aria-controls="admin-directory" key={section.label} label={<Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}><Typography component="span" sx={{ fontSize: 'inherit', fontWeight: 'inherit' }}>{section.label}</Typography><Chip component="span" size="small" label={section.count} sx={{ height: 20, minWidth: 22, fontSize: 10, bgcolor: activeTab === index ? 'primary.light' : 'action.hover', color: activeTab === index ? 'primary.dark' : 'text.secondary', '& .MuiChip-label': { px: 0.75 } }} /></Stack>} />)}
-          <Tab id="admin-tab-5" aria-controls="admin-directory" label="Sessions & feedback" />
-        </Tabs>
-      </Box>
-
-      <Box id="admin-directory" role="tabpanel" aria-labelledby={`admin-tab-${activeTab}`}>
-        {activeTab === 5 && <SessionOverview appointments={appointments} onEdit={setEditingAppointment} currentUser={currentUser} onUpdated={result => setAppointments(previous => mergeRescheduleResult(previous, result))} />}
-        <Alert severity="info" sx={{ display: activeTab === 5 ? 'none' : 'flex', mb: 2, border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5, fontSize: 12 }}>
-          {activeTab === 0 ? 'Review new applications first. Approved users move to discovery before counselor assignment.' : activeTab === 1 ? 'Open a case to review discovery notes, then match a counselor and schedule a session.' : activeTab === 2 ? 'Review your active counseling panel, current assignments, and completed sessions.' : activeTab === 3 ? 'Record discovery observations and match each approved user with the right counselor.' : 'Review deactivated accounts and reactivate them when they are ready to return.'}
-        </Alert>
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2, display: activeTab === 5 ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
-          <TextField size="small" label={activeTab === 0 ? 'Search applications' : 'Search directory'} placeholder={activeTab === 0 ? 'Name, phone, email or intake note' : 'Name, email, phone or expertise'} value={activeTab === 0 ? requestQuery : userQuery} onChange={e => activeTab === 0 ? setRequestQuery(e.target.value) : setUserQuery(e.target.value)} sx={{ width: { xs: '100%', sm: 360 } }} slotProps={{ input: { startAdornment: <SearchIcon color="action" sx={{ mr: 1, fontSize: 18 }} /> } }} />
+      <Box id="admin-directory" role="region" aria-labelledby="admin-section-heading">
+        {activeTab === 6 && <AdminOverview users={users} appointments={appointments} requests={careRequests} onNavigate={openOverviewSection} onCreateUser={() => navigate('/register')} onCreateCounselor={() => { setCreateRole('counselor'); setCreateCounselorOpen(true); }} />}
+        {activeTab === 5 && <SessionOverview key={sessionView} initialFilter={sessionView} appointments={appointments} onEdit={setEditingAppointment} currentUser={currentUser} onUpdated={result => setAppointments(previous => mergeRescheduleResult(previous, result))} />}
+        <Box sx={{ mb: 2, display: [5, 6].includes(activeTab) ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+          <TextField size="small" label={activeTab === 0 ? 'Search applications' : 'Search directory'} placeholder={activeTab === 0 ? 'Name, phone, email or intake note' : 'Name, email, phone or expertise'} value={activeTab === 0 ? requestQuery : userQuery} onChange={e => activeTab === 0 ? setRequestQuery(e.target.value) : setUserQuery(e.target.value)} sx={{ width: { xs: '100%', sm: 340 }, '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }} slotProps={{ input: { startAdornment: <SearchIcon color="action" sx={{ mr: 1, fontSize: 18 }} /> } }} />
           {activeTab === 3 ? <TextField select size="small" label="Discovery stage" value={discoveryFilter} onChange={e => setDiscoveryFilter(e.target.value)} sx={{ minWidth: 190 }}><MenuItem value="all">All discovery cases</MenuItem><MenuItem value="pending">Discovery pending</MenuItem><MenuItem value="ready">Ready to assign</MenuItem></TextField> : activeTab === 4 ? <TextField select size="small" label="Account type" value={archiveFilter} onChange={e => setArchiveFilter(e.target.value)} sx={{ minWidth: 190 }}><MenuItem value="all">All deactivated accounts</MenuItem><MenuItem value="patients">Deactivated users</MenuItem><MenuItem value="counselors">Deactivated counselors</MenuItem></TextField> : <Typography variant="caption" color="text.secondary">{activeTab === 0 ? `${registrationRequests.length} awaiting review` : activeTab === 1 ? `${activePatients.length} approved users` : `${activeCounselors.length} active counselors`}</Typography>}
-        </Paper>
+        </Box>
 
-        {activeTab === 0 && <TableContainer component={Paper} variant="outlined" sx={tableStyles}><Table sx={{ minWidth: 940 }}>
+        {activeTab === 0 && (registrationRequests.length ? <TableContainer component={Paper} variant="outlined" sx={tableStyles}><Table sx={{ minWidth: 940 }}>
           <TableHead><TableRow>
             {['Applicant / contact', 'Track & preference', 'Intake context', 'Applied', 'Actions'].map(title =>
               <TableCell key={title} align={title === 'Actions' ? 'right' : 'left'}>{title}</TableCell>)}
@@ -462,7 +454,7 @@ export default function AdminDashboard({ currentUser }) {
               <TableCell align="right" sx={{ width: 180 }}><Stack direction="row" spacing={0.75} sx={{ justifyContent: 'flex-end' }}><Button size="small" startIcon={<CheckIcon sx={{ fontSize: '14px !important' }} />} disabled={decisionBusy} variant="contained" color="success" sx={{ width: 86 }} onClick={() => decideRegistration('accepted', request)}>Approve</Button><Button size="small" disabled={decisionBusy} variant="outlined" color="error" sx={{ width: 70 }} onClick={() => { setDecisionReason(''); setDecisionRequest(request); }}>Reject</Button></Stack></TableCell>
             </TableRow>;
           })}{!registrationRequests.length && <TableRow><TableCell colSpan={5}><Typography color="text.secondary" align="center" sx={{ py: 4 }}>No registration requests are waiting for review.</Typography></TableCell></TableRow>}</TableBody>
-        </Table></TableContainer>}
+        </Table></TableContainer> : <AdminRegistrationEmptyState filtered={Boolean(requestQuery.trim())} onClear={() => setRequestQuery('')} onViewUsers={() => selectSection(1)} />)}
         {activeTab === 1 && <AccountList onDeactivate={setDeactivateUser} users={activePatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
         {activeTab === 2 && <AccountList onDeactivate={setDeactivateUser} users={activeCounselors} onToggle={handleToggleSuspension} showCounselorDetails requests={careRequests} appointments={appointments} />}
         {activeTab === 3 && <AccountList onDeactivate={setDeactivateUser} users={discoveryPatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
@@ -1248,6 +1240,7 @@ export default function AdminDashboard({ currentUser }) {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Box>
+    </Box>
   );
 }

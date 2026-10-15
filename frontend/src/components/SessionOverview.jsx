@@ -6,17 +6,18 @@ import { Link } from 'react-router-dom';
 import { Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import useSessionClock from '../hooks/useSessionClock';
 import { feedbackEligible, feedbackLabel, hasFeedback, sessionStatus, statusLabel } from '../utils/sessionOutcome';
+import { todayIST } from '../../../shared/counsellingFramework.mjs';
 
-export default function SessionOverview({ appointments, currentUser, onUpdated, onEdit }) {
+export default function SessionOverview({ appointments, currentUser, onUpdated, onEdit, initialFilter = 'all' }) {
   const now = useSessionClock();
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(initialFilter);
   const [query, setQuery] = useState('');
   const sessions = appointments.filter(a => a.appointmentKind !== 'discovery');
   const rescheduleRequests = appointments.filter(pendingReschedule);
   const pending = sessions.filter(a => feedbackEligible(a) && !hasFeedback(a));
   const received = sessions.filter(a => feedbackEligible(a) && hasFeedback(a));
   const awaiting = sessions.filter(a => sessionStatus(a, now) === 'awaiting_outcome');
-  const visible = (filter === 'reschedule' ? rescheduleRequests : sessions).filter(a => filter === 'reschedule' || filter === 'all' || (filter === 'feedback_pending' ? pending.includes(a) : filter === 'feedback_received' ? received.includes(a) : filter === 'missed' ? ['user_absent', 'counselor_absent', 'both_absent'].includes(a.status) : sessionStatus(a, now) === filter))
+  const visible = (filter === 'reschedule' ? rescheduleRequests : sessions).filter(a => filter === 'reschedule' || filter === 'all' || (filter === 'today' ? a.date === todayIST(new Date(now)) && !['cancelled', 'rejected'].includes(a.status) : filter === 'feedback_pending' ? pending.includes(a) : filter === 'feedback_received' ? received.includes(a) : filter === 'missed' ? ['user_absent', 'counselor_absent', 'both_absent'].includes(a.status) : sessionStatus(a, now) === filter))
     .filter(a => [a.patientName, a.counselorName, a.review?.reviewText].some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase())))
     .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
   return <Stack spacing={2}>
@@ -28,7 +29,7 @@ export default function SessionOverview({ appointments, currentUser, onUpdated, 
     </Stack>
     <Paper variant="outlined" sx={{ p: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
       <TextField size="small" label="Search user, counselor or feedback" value={query} onChange={e => setQuery(e.target.value)} sx={{ flex: 1, minWidth: 230 }} />
-      <TextField select size="small" label="Sessions" value={filter} onChange={e => setFilter(e.target.value)} sx={{ minWidth: 200 }}>{[['all', 'All sessions'], ['reschedule', 'Rescheduling requests'], ['upcoming', 'Scheduled'], ['awaiting_outcome', 'Awaiting outcome'], ['completed', 'Completed'], ['missed', 'Missed sessions'], ['feedback_pending', 'Feedback pending'], ['feedback_received', 'Feedback received']].map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField>
+      <TextField select size="small" label="Sessions" value={filter} onChange={e => setFilter(e.target.value)} sx={{ minWidth: 200 }}>{[['all', 'All sessions'], ['today', 'Today (IST)'], ['pending_admin', 'Awaiting approval'], ['reschedule', 'Rescheduling requests'], ['upcoming', 'Scheduled'], ['awaiting_outcome', 'Awaiting outcome'], ['completed', 'Completed'], ['missed', 'Missed sessions'], ['feedback_pending', 'Feedback pending'], ['feedback_received', 'Feedback received']].map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField>
     </Paper>
     <TableContainer component={Paper} variant="outlined"><Table sx={{ minWidth: 850 }}>
       <TableHead><TableRow>{['User / counselor', 'Session (IST)', 'Outcome', 'Feedback', 'Actions'].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
