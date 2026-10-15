@@ -310,14 +310,14 @@ function AppContent() {
           {/* Logo Brand */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'inherit' }} component={Link} to="/">
             <SpaIcon color="primary" sx={{ fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '-0.5px', ...(currentUser?.role === 'admin' ? { whiteSpace: 'nowrap', fontSize: { xs: 20, sm: 24 } } : {}) }}>
+            <Typography variant="h5" sx={{ fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '-0.5px', ...(['admin', 'counselor'].includes(currentUser?.role) ? { whiteSpace: 'nowrap', fontSize: { xs: 20, sm: 24 } } : {}) }}>
               BJS Counselling
             </Typography>
           </Box>
 
           {/* Right Navigation Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
-            <Box sx={{ display: currentUser?.role === 'admin' ? { xs: 'none', sm: 'block' } : 'block' }}>{renderDashboardLink()}</Box>
+            <Box sx={{ display: ['admin', 'counselor'].includes(currentUser?.role) ? { xs: 'none', sm: 'block' } : 'block' }}>{renderDashboardLink()}</Box>
 
             {currentUser && notifications.length > 0 && (
               <NotificationCenter

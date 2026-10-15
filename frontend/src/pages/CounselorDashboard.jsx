@@ -1,10 +1,14 @@
+import AdminSidebar from '../components/AdminSidebar';
+import CounselorOverview from '../components/CounselorOverview';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import MenuIcon from '@mui/icons-material/Menu';
 import ReschedulePanel from '../components/ReschedulePanel';
 import { mergeRescheduleResult } from '../utils/rescheduling';
 import SessionOutcomeDialog from '../components/SessionOutcomeDialog';
 import { resolvedStatuses, sessionStatus, statusLabel } from '../utils/sessionOutcome';
 import useSessionClock from '../hooks/useSessionClock';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Avatar, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, LinearProgress, MenuItem, Paper, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Typography } from '@mui/material';
+import { Alert, Avatar, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutlined';
 import VideoCallOutlinedIcon from '@mui/icons-material/VideoCallOutlined';
@@ -38,7 +42,8 @@ export default function CounselorDashboard({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(5);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [caseFilter, setCaseFilter] = useState('active');
   const [scheduleDate, setScheduleDate] = useState('');
@@ -68,12 +73,20 @@ export default function CounselorDashboard({ currentUser }) {
   const activeCases = requests.filter(r => ['matched', 'active'].includes(r.status));
   const todaySessions = upcoming.filter(a => a.date === todayIST());
   const pendingNotes = completed.filter(a => !a.sessionNotes?.trim());
-  const nextSession = upcoming[0];
   const matchesQuery = values => values.some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase()));
   const visibleCases = requests.filter(r => caseFilter === 'all' || (caseFilter === 'active' ? ['matched', 'active'].includes(r.status) : r.status === 'closed')).filter(r => matchesQuery([r.patientName, r.intakeNotes, r.discoveryNotes, r.preferredFormat]));
   const visibleUpcoming = upcoming.filter(a => (!scheduleDate || a.date === scheduleDate) && matchesQuery([a.patientName, a.purpose, a.intakeNotes, a.appointmentType]));
   const visibleCompleted = history.filter(a => (notesFilter === 'all' || (notesFilter === 'pending' ? a.status === 'completed' && !a.sessionNotes?.trim() : notesFilter === 'missed' ? a.status !== 'completed' : a.status === 'completed')) && matchesQuery([a.patientName, a.sessionNotes, a.purpose]));
-  const sections = ['Assigned cases', 'Upcoming sessions & calendar', 'Session history & notes', 'Availability', `Awaiting outcome (${awaitingOutcome.length})`];
+  const sections = [
+    { id: 5, label: 'Workspace overview', navLabel: 'Overview', icon: DashboardIcon },
+    { id: 0, label: 'Assigned cases', icon: PeopleOutlineIcon, count: activeCases.length },
+    { id: 1, label: 'Sessions & calendar', icon: CalendarMonthOutlinedIcon },
+    { id: 2, label: 'History & notes', icon: AssignmentOutlinedIcon, count: pendingNotes.length },
+    { id: 3, label: 'Availability', icon: CalendarMonthOutlinedIcon },
+    { id: 4, label: 'Awaiting outcome', icon: CheckCircleOutlineIcon, count: awaitingOutcome.length },
+  ];
+  const currentSection = sections.find(section => section.id === activeTab);
+
   const selectTab = value => { setActiveTab(value); setQuery(''); setScheduleDate(''); setNotesFilter('all'); setCaseFilter('active'); };
   const tiles = [
     { label: 'Completed sessions', count: completed.length, hint: 'Completed consultations and notes', icon: CheckCircleOutlineIcon, tab: 2, color: 'primary.main' },
@@ -90,21 +103,16 @@ export default function CounselorDashboard({ currentUser }) {
   };
 
   if (loading) return <Box sx={{ p: 6, textAlign: 'center' }}><CircularProgress size={36} /></Box>;
-  return <Container maxWidth="xl" sx={{ py: 3, '& .MuiButton-root': { borderRadius: 1.5 } }}>
-    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, mb: 2, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, background: 'linear-gradient(110deg, rgba(99,102,241,.04), rgba(16,185,129,.025))' }}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', minWidth: 0 }}>
-        <Avatar src={currentUser.avatar} sx={{ width: 56, height: 56, bgcolor: 'primary.light', color: 'primary.dark', borderRadius: 2 }}>{initials(currentUser.name)}</Avatar>
-        <Box><Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}><Typography variant="h5" sx={{ fontWeight: 750, fontSize: { xs: 21, md: 24 } }}>{currentUser.name}</Typography><Chip size="small" label={currentUser.credentials || 'Counselor'} color="primary" variant="outlined" sx={{ fontSize: 11, height: 24 }} /></Box>
-          {currentUser.specialty && <Typography variant="caption" color="primary">{currentUser.specialty}</Typography>}
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Manage your assigned cases, counseling sessions, and weekly availability.</Typography>
+  return <Box sx={{ display: 'flex', alignItems: 'flex-start', minHeight: 'calc(100dvh - 70px)', bgcolor: '#f7f9fc', '& .MuiButton-root': { borderRadius: 1.5 } }}>
+    <AdminSidebar workspace="Counselor" navigationId="counselor" panelId="counselor-panel" sections={sections} activeSection={activeTab} onSelect={selectTab} mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+    <Box component="main" sx={{ flex: 1, minWidth: 0, px: { xs: 2, sm: 3, lg: 4 }, py: 3, maxWidth: 1664, mx: 'auto' }}>
+      <Box sx={{ mb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+          <IconButton aria-label="Open counselor navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} sx={{ display: { md: 'none' }, border: '1px solid #e2e8f0', bgcolor: '#fff' }}><MenuIcon fontSize="small" /></IconButton>
+          <Box><Typography id="counselor-section-heading" component="h1" sx={{ fontSize: { xs: 23, md: 24 }, fontWeight: 750, letterSpacing: '-.035em', color: '#172033' }}>{currentSection.label}</Typography><Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, mt: .5 }}>{activeTab === 5 ? `Welcome, ${currentUser.name}. Your cases, pending work, and upcoming sessions at a glance.` : 'Manage your assigned cases, sessions, and weekly availability.'}</Typography></Box>
         </Box>
-      </Stack>
-      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}><Chip size="small" icon={<CalendarMonthOutlinedIcon />} label={formatDate(todayIST())} variant="outlined" /><Button size="small" variant="outlined" onClick={() => selectTab(3)}>Update availability</Button><Button size="small" variant="contained" onClick={() => { selectTab(2); setNotesFilter('pending'); }}>Log session notes</Button></Box>
-    </Paper>
-    <Paper variant="outlined" sx={{ py: 1.25, px: 2, mb: 2, borderRadius: 2, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-      <Typography variant="caption" color="primary" sx={{ fontWeight: 700, mr: 1 }}>BJS care pathway</Typography>
-      {['Admin review', 'Discovery notes', 'Counselor matched', 'Sessions & notes', 'Care complete'].map((stage, i) => <Chip key={stage} size="small" label={`${i + 1}. ${stage}`} variant="outlined" sx={{ height: 22, fontSize: 11 }} />)}
-    </Paper>
+        {activeTab === 5 && <Typography variant="caption" color="text.secondary">{formatDate(todayIST())} · IST</Typography>}
+      </Box>
         {!currentUser?.approved && (
       <Alert
         severity="warning"
@@ -127,8 +135,8 @@ export default function CounselorDashboard({ currentUser }) {
     )}
     {error && !noteAppointment && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
-    {!!awaitingOutcome.length && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => selectTab(4)}>Review outcomes</Button>}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended and need attendance confirmation.</Alert>}
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 1.5, mb: 2.5 }}>
+    {!!awaitingOutcome.length && ![4, 5].includes(activeTab) && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => selectTab(4)}>Review outcomes</Button>}>{awaitingOutcome.length} session{awaitingOutcome.length === 1 ? '' : 's'} ended and need attendance confirmation.</Alert>}
+    {activeTab === 5 && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, 1fr)' }, gap: 1.5, mb: 2.5 }}>
       {tiles.map((tile, i) => {
         const Icon = tile.icon;
         const selected = (i === 0 && activeTab === 2 && notesFilter === 'all') || (i === 1 && activeTab === 0) || (i === 2 && activeTab === 1 && scheduleDate === todayIST()) || (i === 3 && activeTab === 2 && notesFilter === 'pending');
@@ -138,13 +146,11 @@ export default function CounselorDashboard({ currentUser }) {
           </CardActionArea>
         </Card>;
       })}
-    </Box>
-    <Paper variant="outlined" sx={{ mb: 2.5, px: 1, borderRadius: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-      <Tabs value={activeTab} onChange={(_, value) => selectTab(value)} variant="scrollable" scrollButtons="auto" aria-label="Counselor workspace" sx={{ flex: 1, minWidth: 0, '& .MuiTab-root': { minHeight: 48, fontSize: 12, textTransform: 'none', fontWeight: 650, px: 1.5 } }}>{sections.map((section, i) => <Tab key={section} id={`counselor-tab-${i}`} aria-controls="counselor-panel" label={section} />)}</Tabs>
-      {activeTab !== 3 && <TextField size="small" placeholder="Search patient, notes or topic" value={query} onChange={e => setQuery(e.target.value)} slotProps={{ input: { startAdornment: <SearchIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} /> }, htmlInput: { 'aria-label': 'Search workspace' } }} sx={{ width: { xs: '100%', md: 255 }, m: 1 }} />}
-    </Paper>
-    <Box id="counselor-panel" role="tabpanel" aria-labelledby={`counselor-tab-${activeTab}`}>
-      {activeTab === 0 && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) 300px' }, alignItems: 'start', gap: 2.5 }}>
+    </Box>}
+    {![3, 5].includes(activeTab) && <Box sx={{ mb: 2 }}><TextField size="small" placeholder="Search patient, notes or topic" value={query} onChange={e => setQuery(e.target.value)} slotProps={{ input: { startAdornment: <SearchIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} /> }, htmlInput: { 'aria-label': 'Search workspace' } }} sx={{ width: { xs: '100%', sm: 340 }, bgcolor: '#fff' }} /></Box>}
+    <Box id="counselor-panel" role="region" aria-labelledby="counselor-section-heading">
+      {activeTab === 5 && <CounselorOverview todaySessions={todaySessions} upcoming={upcoming} awaitingOutcome={awaitingOutcome} pendingNotes={pendingNotes} activeCases={activeCases} onNotes={openNotes} onSelect={(tab, filter) => { selectTab(tab); if (filter === 'pending') setNotesFilter('pending'); if (filter === 'today') setScheduleDate(todayIST()); }} />}
+      {activeTab === 0 && <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', alignItems: 'start', gap: 2.5 }}>
         <Box>
           <Paper variant="outlined" sx={{ p: 2, mb: 1.5, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}><Box><Typography sx={{ fontWeight: 700 }}>Assigned counseling cases</Typography><Typography variant="caption" color="text.secondary">Review discovery notes, attend assigned sessions, and add session notes.</Typography></Box><TextField select size="small" label="Cases" value={caseFilter} onChange={e => setCaseFilter(e.target.value)} sx={{ minWidth: 150 }}><MenuItem value="active">Active cases</MenuItem><MenuItem value="closed">Closed cases</MenuItem><MenuItem value="all">All assigned cases</MenuItem></TextField></Paper>
           <TableContainer component={Paper} variant="outlined" sx={tableStyles}><Table sx={{ minWidth: 740 }}><TableHead><TableRow>{['Patient / client', 'Track & preference', 'Progress / stage', 'Next session', 'Actions'].map(label => <TableCell key={label} align={label === 'Actions' ? 'right' : 'left'}>{label}</TableCell>)}</TableRow></TableHead><TableBody>
@@ -157,10 +163,7 @@ export default function CounselorDashboard({ currentUser }) {
             {!visibleCases.length && <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}>No assigned cases match this view.</TableCell></TableRow>}
           </TableBody></Table></TableContainer>
         </Box>
-        <Stack spacing={2}>
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: 'primary.light' }}><Typography variant="overline" color="primary" sx={{ fontWeight: 700 }}>Next scheduled session</Typography>{nextSession ? <><Typography sx={{ fontWeight: 700, mt: 1 }}>{nextSession.patientName}</Typography><Typography variant="body2" color="text.secondary">{formatDate(nextSession.date)} · {nextSession.time} IST</Typography><Chip size="small" label={modeLabel(nextSession.appointmentType)} sx={{ mt: 1 }} /><Divider sx={{ my: 2 }} /><Typography variant="caption" color="text.secondary">Session focus</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{nextSession.purpose || nextSession.intakeNotes || 'Review the case notes before the session.'}</Typography><AttendSessionButton fullWidth variant="contained" sx={{ mt: 2 }} appointment={nextSession} /><Button fullWidth size="small" sx={{ mt: 0.5 }} onClick={() => openNotes(nextSession)}>Session notes</Button></> : <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Your next session will appear here once it is scheduled.</Typography>}</Paper>
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography sx={{ fontWeight: 700, mb: 1 }}>Documentation checklist</Typography><Typography variant="body2" color="text.secondary">{pendingNotes.length} completed session{pendingNotes.length === 1 ? '' : 's'} awaiting notes.</Typography><Button size="small" sx={{ mt: 1 }} onClick={() => { selectTab(2); setNotesFilter('pending'); }}>Review pending notes</Button></Paper>
-        </Stack>
+
       </Box>}
       {activeTab === 1 && <Stack spacing={2}>
         <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}><Typography sx={{ fontWeight: 700 }}>Upcoming sessions</Typography><Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}><Button size="small" variant={scheduleDate ? 'text' : 'outlined'} onClick={() => setScheduleDate('')}>All upcoming</Button><Button size="small" onClick={() => setScheduleDate(todayIST())}>Today</Button><TextField size="small" type="date" label="Session date (IST)" value={scheduleDate} slotProps={{ inputLabel: { shrink: true } }} onChange={e => setScheduleDate(e.target.value)} /></Box></Paper>
@@ -186,5 +189,6 @@ export default function CounselorDashboard({ currentUser }) {
     {outcomeAppointment && <SessionOutcomeDialog appointment={outcomeAppointment} onClose={() => setOutcomeAppointment(null)} onSaved={(updated, message) => { setAppointments(previous => previous.map(a => a.id === updated.id ? updated : a)); setOutcomeAppointment(null); selectTab(2); setNotesFilter(updated.status === 'completed' ? 'completed' : 'missed'); setSuccess(message); }} />}
     <Dialog open={Boolean(caseId)} onClose={() => setCaseId('')} fullWidth maxWidth="md"><DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>Assigned case<IconButton aria-label="Close case" onClick={() => setCaseId('')}><CloseIcon /></IconButton></DialogTitle><DialogContent dividers>{caseId && <CareWorkflow currentUser={currentUser} requestId={caseId} filter={3} onAppointmentsChange={setAppointments} onRequestsChange={setRequests} />}</DialogContent></Dialog>
     <Dialog open={Boolean(noteAppointment)} onClose={() => !busy && setNoteAppointment(null)} fullWidth maxWidth="sm"><DialogTitle>Session notes · {noteAppointment?.patientName}</DialogTitle><DialogContent dividers><Stack spacing={2}>{error && <Alert severity="error">{error}</Alert>}<Typography variant="body2" color="text.secondary">{noteAppointment?.date} · {noteAppointment?.time} IST · {noteAppointment && modeLabel(noteAppointment.appointmentType)}</Typography><Paper variant="outlined" sx={{ p: 1.5 }}><Typography variant="caption" color="text.secondary">Intake / session goal</Typography><Typography variant="body2">{noteAppointment?.purpose || noteAppointment?.intakeNotes || 'No additional intake details.'}</Typography></Paper><TextField fullWidth multiline minRows={6} label="Clinical progress notes" value={notes} disabled={busy} onChange={e => setNotes(e.target.value)} />{noteAppointment && <SessionNotesHistory appointment={noteAppointment} appointments={appointments} />}</Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setNoteAppointment(null)}>Close</Button><Button variant="contained" disabled={busy || !notes.trim() || notes === (noteAppointment?.sessionNotes || '')} onClick={saveNotes}>{busy ? 'Saving…' : 'Save notes'}</Button></DialogActions></Dialog>
-  </Container>;
+    </Box>
+  </Box>;
 }
