@@ -2432,7 +2432,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               }}
             />
 
-            <Box sx={{ position: 'relative', zIndex: 1, maxWidth: '680px' }}>
+            {/* <Box sx={{ position: 'relative', zIndex: 1, maxWidth: '680px' }}>
 
               <Typography variant="h3" sx={{ fontFamily: 'Outfit', fontWeight: 600, fontSize: { xs: '1.9rem', sm: '2.5rem' }, mb: 2, lineHeight: 1.2 }}>
                 Ready to take the gentle first step?
@@ -2490,7 +2490,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                   Learn How It Works
                 </Button>
               </Box>
-            </Box>
+            </Box> */}
           </Box>
         </Container>
       </Box>

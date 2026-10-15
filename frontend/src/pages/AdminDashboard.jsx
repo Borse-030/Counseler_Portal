@@ -14,13 +14,23 @@ import {
   Box, Container, Typography, Grid, Card, CardContent, CardActionArea, Avatar, Button, Tabs, Tab,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Chip, CircularProgress, Alert, TextField, IconButton, Dialog, DialogTitle, Stack,
-  DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Drawer, Divider
+  DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Drawer, Divider, Tooltip
 } from '@mui/material';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import HeadsetMicOutlinedIcon from '@mui/icons-material/HeadsetMicOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PhoneIcon from '@mui/icons-material/Phone';
+import TranslateIcon from '@mui/icons-material/Translate';
+import PlaceIcon from '@mui/icons-material/Place';
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
+import EmailIcon from '@mui/icons-material/Email';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PersonIcon from '@mui/icons-material/Person';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import AddIcon from '@mui/icons-material/Add';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
@@ -74,8 +84,16 @@ function AccountList({ users, onToggle, onDeactivate, onSelectCase, showCounselo
     <Table size="small" sx={{ minWidth: showPatientLifecycle ? 1080 : 650 }}>
       <TableHead><TableRow>
         <TableCell sx={{ fontWeight: 700 }}>User / contact</TableCell>
-        {showCounselorDetails && <><TableCell sx={{ fontWeight: 700 }}>Specialty</TableCell><TableCell sx={{ fontWeight: 700 }}>Experience</TableCell></>}
-        {showPatientLifecycle && <><TableCell sx={{ fontWeight: 700 }}>Track</TableCell><TableCell sx={{ fontWeight: 700 }}>Discovery</TableCell><TableCell sx={{ fontWeight: 700 }}>Assigned counselor</TableCell><TableCell sx={{ fontWeight: 700 }}>Sessions done</TableCell></>}
+        {showCounselorDetails && <>
+          <TableCell sx={{ fontWeight: 700 }}>Specialty</TableCell>
+          <TableCell sx={{ fontWeight: 700 }}>Experience</TableCell>
+        </>}
+        {showPatientLifecycle && <>
+          <TableCell sx={{ fontWeight: 700 }}>Track</TableCell>
+          <TableCell sx={{ fontWeight: 700 }}>Discovery Call Status</TableCell>
+          <TableCell sx={{ fontWeight: 700 }}>Assigned counselor</TableCell>
+          <TableCell sx={{ fontWeight: 700 }}>Sessions done</TableCell>
+        </>}
         <TableCell sx={{ fontWeight: 700 }}>Registered</TableCell><TableCell align="right" sx={{ fontWeight: 700, width: showPatientLifecycle ? 328 : 120 }}>Actions</TableCell>
       </TableRow></TableHead>
       <TableBody>{users.map(user => {
@@ -85,9 +103,50 @@ function AccountList({ users, onToggle, onDeactivate, onSelectCase, showCounselo
         return <TableRow key={user.id} hover>
           <TableCell sx={{ minWidth: 180 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}><Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.light', color: 'primary.dark', fontSize: 12, fontWeight: 700 }}>{initials(user.name)}</Avatar><Box><Typography variant="body2" fontWeight={650}>{user.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{user.email || user.mobile || 'Contact not provided'}</Typography></Box></Stack></TableCell>
           {showCounselorDetails && <><TableCell>{user.specialty || '—'}</TableCell><TableCell>{user.experience ? `${user.experience} years` : '—'}</TableCell></>}
-          {showPatientLifecycle && <><TableCell>{request?.supportType || request?.caseType || request?.preferredFormat || 'Not specified'}</TableCell><TableCell><Chip size="small" color={discovery === 'Pending' ? 'warning' : 'success'} label={discovery} />{discovery === 'Completed' && request?.timeline?.length > 0 && <Typography variant="caption" display="block" color="text.secondary">{new Date([...request.timeline].reverse().find(event => event.status === 'discovery_completed')?.at || request.updatedAt).toLocaleDateString()}</Typography>}</TableCell><TableCell>{request?.finalCounselorName || 'Unassigned'}</TableCell><TableCell>{appointments.filter(appointment => appointment.patientId === user.id && appointment.status === 'completed' && ['session', 'follow_up', ''].includes(appointment.appointmentKind)).length}</TableCell></>}
+          {showPatientLifecycle && <><TableCell>{request?.supportType || request?.caseType || request?.preferredFormat || 'Not specified'}</TableCell>
+            <TableCell><Chip size="small" color={discovery === 'Pending' ? 'warning' : 'success'} label={discovery} />{discovery === 'Completed' && request?.timeline?.length > 0 && <Typography variant="caption" display="block" color="text.secondary">{new Date([...request.timeline].reverse().find(event => event.status === 'discovery_completed')?.at || request.updatedAt).toLocaleDateString()}</Typography>}</TableCell>
+            <TableCell>{request?.finalCounselorName || 'Unassigned'}</TableCell><TableCell>{appointments.filter(appointment => appointment.patientId === user.id && appointment.status === 'completed' && ['session', 'follow_up', ''].includes(appointment.appointmentKind)).length}</TableCell></>}
           <TableCell sx={{ whiteSpace: 'nowrap' }}>{shortDate(user.createdAt)}</TableCell>
-          <TableCell align="right"><Box sx={{ display: 'grid', gridTemplateColumns: showPatientLifecycle ? '96px 112px 88px' : '88px', justifyContent: 'end', alignItems: 'center', gap: 0.75 }}>{showPatientLifecycle && <>{request ? <Button size="small" onClick={() => onSelectCase?.(user, request)}>{discovery === 'Pending' ? 'Log discovery' : 'Details'}</Button> : <Box />}{scheduledSession ? <Box sx={{ textAlign: 'center' }}><Button size="small" variant="outlined" onClick={() => onSelectCase?.(user, request)}>View session</Button><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontSize: 10 }}>Booked · {shortDate(scheduledSession.date)}<br />{scheduledSession.time} IST</Typography></Box> : request && ['discovery_completed', 'matched', 'active'].includes(request.status) ? <Button size="small" variant="contained" onClick={() => onSelectCase?.(user, request, { schedule: true })}>Schedule session</Button> : <Box />}</>}<Button size="small" variant="outlined" color={user.suspended ? 'success' : 'error'} onClick={() => onToggle(user.id, user.suspended)}>{user.suspended ? 'Reactivate' : 'Deactivate'}</Button></Box></TableCell>
+          <TableCell align="right"><Box sx={{ display: 'grid', gridTemplateColumns: showPatientLifecycle ? '96px 112px 88px' : '88px', justifyContent: 'end', alignItems: 'center', gap: 0.75 }}>{showPatientLifecycle && <>{request ? <Button size="small" onClick={() => onSelectCase?.(user, request)}>{discovery === 'Pending' ? 'Log discovery' : 'Details'}</Button> : <Box />}
+            {scheduledSession ? (
+              <Tooltip
+                arrow
+                placement="top"
+                title={
+                  <Box sx={{ p: 0.5 }}>
+                    <Typography variant="caption" display="block" fontWeight={700}>
+                      Session booked
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      {shortDate(scheduledSession.date)}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      {scheduledSession.time} IST
+                    </Typography>
+                  </Box>
+                }
+              >
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => onSelectCase?.(user, request)}
+                >
+                  View session
+                </Button>
+              </Tooltip>
+            ) : request &&
+              ['discovery_completed', 'matched', 'active'].includes(request.status) ? (
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => onSelectCase?.(user, request, { schedule: true })}
+              >
+                Schedule session
+              </Button>
+            ) : (
+              <Box />
+            )}
+          </>}<Button size="small" variant="outlined" color={user.suspended ? 'success' : 'error'} onClick={() => onToggle(user.id, user.suspended)}>{user.suspended ? 'Reactivate' : 'Deactivate'}</Button></Box></TableCell>
         </TableRow>
       })}</TableBody>
     </Table>
@@ -409,47 +468,474 @@ export default function AdminDashboard({ currentUser }) {
         {activeTab === 3 && <AccountList onDeactivate={setDeactivateUser} users={discoveryPatients} onToggle={handleToggleSuspension} onSelectCase={openCase} requests={careRequests} appointments={appointments} showPatientLifecycle />}
         {activeTab === 4 && <AccountList onDeactivate={setDeactivateUser} users={archiveFilter === 'all' ? [...deactivatedPatients, ...deactivatedCounselors] : archiveFilter === 'patients' ? deactivatedPatients : deactivatedCounselors} onToggle={handleToggleSuspension} showCounselorDetails={archiveFilter === 'counselors'} requests={careRequests} appointments={appointments} />}
       </Box>
-      <Drawer anchor="right" open={Boolean(selectedCase) && !scheduleOpen} onClose={() => setSelectedCase(null)} PaperProps={{ sx: { width: { xs: '100vw', sm: 640 }, minWidth: { sm: 560 }, maxWidth: '100vw', p: 0 } }}>
+      <Drawer anchor="right" open={Boolean(selectedCase) && !scheduleOpen} onClose={() => setSelectedCase(null)} PaperProps={{ sx: { width: { xs: '100vw', sm: 500 }, maxWidth: '100vw', p: 0 } }}>
         {selectedCase && currentCaseRequest && <Stack spacing={0} sx={{ height: '100%', overflowY: 'auto' }}>
-          <Box sx={{ p: { xs: 2.5, sm: 3.5 }, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+          <Box
+            sx={{
+              p: { xs: 2.5, sm: 3.5 },
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #F5FAFF 55%, #E8F4FF 100%)',
+              color: '#172B4D',
+              borderBottom: '1px solid #DCEAF7',
+            }}
+          >
             <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box>
-                <Typography variant="overline" sx={{ opacity: 0.8, fontWeight: 750 }}>PATIENT CASE</Typography>
-                <Typography variant="h5" fontWeight={800}>{selectedCase.user.name}</Typography>
-                <Typography sx={{ opacity: 0.88 }}>{selectedCase.user.email || 'Email not provided'}</Typography>
-                {currentCaseRequest.patientMobile && <Typography sx={{ opacity: 0.88 }}>{currentCaseRequest.patientMobile}</Typography>}
+                <Typography variant="overline" sx={{ opacity: 0.8, fontWeight: 750 }}>CASE Number : {selectedCase.user.id}</Typography>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  spacing={2}
+                  sx={{ flexWrap: 'wrap', gap: 1.5 }}
+                >
+                  <Typography variant="h5" fontWeight={800}>
+                    {selectedCase.user.name}
+                  </Typography>
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      component="a"
+                      href={`mailto:${selectedCase.user.email}`}
+                      clickable
+                      icon={<EmailIcon />}
+                      label={selectedCase.user.email || 'Email not provided'}
+                      size="medium"
+                      variant="outlined"
+                      sx={{
+                        color: '#172B4D',
+                        borderColor: '#DCEAF7',
+                        bgcolor: 'rgba(255,255,255,0.7)',
+                        textDecoration: 'none',
+                        '&:hover': { bgcolor: '#E8F4FF' },
+                      }}
+                    />
+
+                    {currentCaseRequest.patientMobile && (
+                      <Chip
+                        component="a"
+                        href={`tel:${currentCaseRequest.patientMobile}`}
+                        clickable
+                        icon={<PhoneIcon />}
+                        label={currentCaseRequest.patientMobile}
+                        size="medium"
+                        variant="outlined"
+                        sx={{
+                          color: '#172B4D',
+                          borderColor: '#DCEAF7',
+                          bgcolor: 'rgba(255,255,255,0.7)',
+                          textDecoration: 'none',
+                          '&:hover': { bgcolor: '#E8F4FF' },
+                        }}
+                      />
+                    )}
+                  </Stack>
+                </Stack>
               </Box>
-              <IconButton aria-label="Close patient details" onClick={() => setSelectedCase(null)} sx={{ color: 'inherit' }}><CloseIcon /></IconButton>
+              <IconButton aria-label="Close patient details" onClick={() => setSelectedCase(null)} sx={{ color: 'inherit' }}><CloseIcon sx={{ color: '#486581' }} /></IconButton>
             </Stack>
-            <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 2 }}>
-              <Chip size="small" color={discoveryIsComplete ? 'success' : 'warning'} label={`Discovery ${discoveryIsComplete ? 'Completed' : 'Pending'}`} />
-              <Chip size="small" variant="outlined" label={currentCaseRequest.finalCounselorName || 'Counselor not assigned'} sx={{ color: 'inherit', borderColor: 'rgba(255,255,255,.5)' }} />
-            </Stack>
-          </Box>
-          <Stack spacing={2.5} sx={{ p: { xs: 2.5, sm: 3.5 } }}>
-            <Divider />
-            <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Intake details</Typography>
-              <Typography variant="body2" color="text.secondary">Registration received {currentCaseRequest.createdAt ? new Date(currentCaseRequest.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</Typography>
-              <Typography variant="body2" color="text.secondary">{currentCaseRequest.supportType || currentCaseRequest.caseType || currentCaseRequest.preferredFormat || 'Counseling request'} · {currentCaseRequest.preferredLanguage || 'Language not specified'}</Typography>
-              <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{currentCaseRequest.intakeNotes || 'No intake notes provided.'}</Typography>
-              <Grid container spacing={1} sx={{ mt: 1 }}>
+            <Box sx={{ width: '100%', maxWidth: { xs: '100%', md: 800 } }}>
+              <Grid
+                container
+                spacing={0}
+                sx={{
+                  mt: 2,
+                }}
+              >
                 {[
-                  ['Gender', selectedCase.user.gender], ['Date of birth', selectedCase.user.dob],
-                  ['Location', [selectedCase.user.city, selectedCase.user.state].filter(Boolean).join(', ')],
-                  ['Preferred language', selectedCase.user.preferredLanguage],
-                  ['Counseling requirements', selectedCase.user.counselingRequirements],
-                ].filter(([, value]) => value).map(([labelText, value]) => <Grid size={{ xs: 12, sm: 6 }} key={labelText}><Paper variant="outlined" sx={{ p: 1.25, height: '100%' }}><Typography variant="caption" color="text.secondary">{labelText}</Typography><Typography variant="body2">{value}</Typography></Paper></Grid>)}
+                  {
+                    label: 'Gender',
+                    value: selectedCase.user.gender,
+                    icon: <PersonIcon />,
+                    color: 'primary.main',
+                  },
+                  {
+                    label: 'Date of Birth',
+                    value: selectedCase.user.dob,
+                    icon: <CalendarMonthOutlinedIcon />,
+                    color: 'primary.main',
+                  },
+                  {
+                    label: 'Location',
+                    value: [
+                      selectedCase.user.city,
+                      selectedCase.user.state,
+                    ].filter(Boolean).join(', '),
+                    icon: <LocationOnOutlinedIcon />,
+                    color: 'error.main',
+                  },
+                  {
+                    label: 'Languages',
+                    value: selectedCase.user.preferredLanguage,
+                    icon: <TranslateIcon />,
+                    color: 'success.main',
+                  },
+                  {
+                    label: 'Counseling requirements',
+                    value: selectedCase.user.counselingRequirements,
+                    icon: <PsychologyOutlinedIcon />,
+                    color: 'secondary.main',
+                  },
+                  {
+                    label: 'Discovery Call',
+                    value: discoveryIsComplete
+                      ? 'Completed'
+                      : 'Pending',
+                    subValue: discoveryIsComplete
+                      ? (currentCaseRequest.discoveryNotesHistory?.at(-1)?.at ||
+                        [...(currentCaseRequest.timeline || [])]
+                          .reverse()
+                          .find(event => event.status === 'discovery_completed')?.at ||
+                        currentCaseRequest.updatedAt)
+                        ? new Date(
+                          currentCaseRequest.discoveryNotesHistory?.at(-1)?.at ||
+                          [...(currentCaseRequest.timeline || [])]
+                            .reverse()
+                            .find(event => event.status === 'discovery_completed')?.at ||
+                          currentCaseRequest.updatedAt
+                        ).toLocaleString('en-IN', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })
+                        : null
+                      : null,
+                    icon: <AccessTimeIcon />,
+                    color: discoveryIsComplete ? 'success.main' : 'warning.main',
+                  },
+                  {
+                    label: 'Counselor Assignment',
+                    value: currentCaseRequest.finalCounselorName ||
+                      'Not assigned',
+                    icon: <PsychologyOutlinedIcon />,
+                    color: currentCaseRequest.finalCounselorId
+                      ? 'success.main'
+                      : 'warning.main',
+                  },
+                ].map(item => (
+                  <Grid
+                    size={{ xs: 6, sm: 4, md: 3 }}
+                    key={item.label}
+                  >
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: { xs: 1.25, sm: 1 },
+                        height: '100%',
+                        // minHeight: { xs: 100, sm: 110 },
+                        borderRadius: 2,
+                        bgcolor: 'rgba(198, 198, 198, 0)',
+                        // borderColor: '#DCEAF7',
+                        border: 'none',
+                        color: '#172B4D',
+                        boxShadow: '0 2px 2px rgba(96, 97, 98, 0.08)',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', color: item.color, flexShrink: 0, gap: 1 }}>
+                        {item.icon}
+                        <Typography
+                          variant="body"
+                          sx={{
+                            display: 'block',
+                            alignContent: "center",
+                            mb: 1,
+                            color: 'inherit',
+                            opacity: 0.8,
+                          }}
+                        >
+                          {item.label}
+                        </Typography>
+                      </Box>
+
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          sx={{ overflowWrap: 'anywhere' }}
+                        >
+                          {item.value || '—'}
+                        </Typography>
+                      </Stack>
+
+                      {item.subValue && (
+                        <Typography
+                          variant="caption"
+                          sx={{ display: 'block', mt: 0.5, opacity: 0.8 }}
+                        >
+                          {item.subValue}
+                        </Typography>
+                      )}
+                    </Paper>
+                  </Grid>
+                ))}
               </Grid>
             </Box>
+          </Box>
+          <Stack spacing={2.5} sx={{ p: { xs: 2.5, sm: 3.5 } }}>
+            <>
+              {/* Intake Details */}
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                flexWrap="wrap"
+                gap={1}
+              >
+                {/* <Stack direction="row" spacing={1.25} alignItems="center"> */}
+                <Typography variant="overline"
+                  sx={{ opacity: 0.8, fontWeight: 750, display: 'block' }}>
+                  INTAKE DETAILS
+                </Typography>
+                {/* </Stack> */}
+              </Stack>
 
-            <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Discovery call</Typography>
-              <Alert severity={discoveryIsComplete ? 'success' : 'warning'} sx={{ mb: 1.5 }}>{discoveryIsComplete ? 'Completed' : 'Pending'}{discoveryIsComplete && (currentCaseRequest.discoveryNotesHistory?.length || currentCaseRequest.timeline?.length) ? ` · ${new Date(currentCaseRequest.discoveryNotesHistory?.at(-1)?.at || [...(currentCaseRequest.timeline || [])].reverse().find(event => event.status === 'discovery_completed')?.at || currentCaseRequest.updatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}</Alert>
-              {['accepted', 'discovery_scheduled', 'discovery_completed', 'matched', 'active'].includes(currentCaseRequest.status) && <>
-                <DiscoveryCallEditor key={currentCaseRequest.id} request={currentCaseRequest} busy={discoveryBusy} completed={discoveryIsComplete} onSave={saveDiscovery} />
-              </>}
-              <DiscoveryPlanSummary plan={currentCaseRequest.discoveryPlan} />
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 2, mb: 1 }}>Discovery history</Typography>
-              {currentCaseRequest.discoveryNotesHistory?.length ? <Stack spacing={1}>{[...currentCaseRequest.discoveryNotesHistory].reverse().map((entry, index) => <Paper key={`${entry.at}-${index}`} variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">{new Date(entry.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {entry.actorName || 'Admin'}</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{entry.notes}</Typography><DiscoveryPlanSummary plan={entry.discoveryPlan} /></Paper>)}</Stack> : currentCaseRequest.discoveryNotes ? <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}><Typography variant="caption" color="text.secondary">Current saved notes</Typography><Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{currentCaseRequest.discoveryNotes}</Typography></Paper> : <Typography variant="body2" color="text.secondary">No discovery notes recorded yet.</Typography>}
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 50,
+                        height: 50,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: 'primary.main',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <AccessTimeIcon />
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase', fontWeight: 650 }}
+                      >
+                        Registration received
+                      </Typography>
+                      <Typography fontWeight={500}>
+                        {currentCaseRequest.createdAt
+                          ? new Date(currentCaseRequest.createdAt).toLocaleString(
+                            'en-IN',
+                            {
+                              day: 'numeric', month: 'short', year: 'numeric',
+                              hour: 'numeric', minute: '2-digit'
+                            }
+                          )
+                          : '—'}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 50,
+                        height: 50,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: 'primary.main',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <VideocamOutlinedIcon />
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase', fontWeight: 650 }}
+                      >
+                        Consultation mode
+                      </Typography>
+                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        <Typography fontWeight={500}>
+                          {currentCaseRequest.preferredFormat ||
+                            currentCaseRequest.supportType ||
+                            currentCaseRequest.caseType ||
+                            'Not specified'}
+                        </Typography>
+                        <Typography color="text.disabled">•</Typography>
+                        <Typography color="text.secondary">
+                          {currentCaseRequest.preferredLanguage || 'Language not specified'}
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  </Stack>
+                </Grid>
+              </Grid>
+
+              {currentCaseRequest.intakeNotes && (
+                <Box sx={{ mt: 2.5, pt: 2 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Intake notes
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                    {currentCaseRequest.intakeNotes}
+                  </Typography>
+                </Box>
+              )}
+            </>
+
+
+            <Box>
+              <Stack spacing={1.5}>
+                <Box>
+
+                  {['accepted', 'discovery_scheduled', 'discovery_completed', 'matched', 'active'].includes(currentCaseRequest.status) && (
+                    <>
+                      <DiscoveryCallEditor
+                        key={currentCaseRequest.id}
+                        request={currentCaseRequest}
+                        busy={discoveryBusy}
+                        completed={discoveryIsComplete}
+                        onSave={saveDiscovery}
+                      />
+
+                      <DiscoveryPlanSummary
+                        plan={currentCaseRequest.discoveryPlan}
+                      />
+                    </>
+                  )}
+
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography
+                    variant="overline"
+                    sx={{ opacity: 0.8, fontWeight: 750, display: 'block', mb: 1 }}
+                  >
+                    DISCOVERY NOTE HISTORY
+                  </Typography>
+
+                  {currentCaseRequest.discoveryNotesHistory?.length ? (
+                    <Box sx={{ pl: 0.5 }}>
+                      {[...currentCaseRequest.discoveryNotesHistory]
+                        .reverse()
+                        .map((entry, index, entries) => {
+                          const isLast = index === entries.length - 1;
+
+                          return (
+                            <Box
+                              key={`${entry.at}-${index}`}
+                              sx={{
+                                display: 'flex',
+                                gap: 1.5,
+                                position: 'relative',
+                                pb: isLast ? 0 : 2,
+                              }}
+                            >
+                              {/* Timeline dot and connecting line */}
+                              <Box
+                                sx={{
+                                  width: 22,
+                                  flexShrink: 0,
+                                  display: 'flex',
+                                  justifyContent: 'center',
+                                  position: 'relative',
+                                }}
+                              >
+                                {!isLast && (
+                                  <Box
+                                    sx={{
+                                      position: 'absolute',
+                                      top: 9,
+                                      bottom: -16,
+                                      width: 2,
+                                      bgcolor: 'divider',
+                                    }}
+                                  />
+                                )}
+
+                                <Box
+                                  sx={{
+                                    width: 9,
+                                    height: 9,
+                                    mt: 0.5,
+                                    borderRadius: '50%',
+                                    bgcolor: 'primary.main',
+                                    flexShrink: 0,
+                                    zIndex: 1,
+                                  }}
+                                />
+                              </Box>
+
+                              {/* Note details */}
+                              <Box
+                                sx={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 0.25,
+                                  pb: 0.25,
+                                }}
+                              >
+                                <Typography variant="body2" color="text.secondary" sx={{ display: "flex", flexDirection: "row", justifyContent: "space-between" }}>
+                                  {new Date(entry.at).toLocaleString('en-IN', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  })}
+                                  <Box>
+                                    Noted by : {' '}
+                                    {entry.actorName || 'Admin'}
+                                  </Box>
+                                </Typography>
+
+                                <Typography
+                                  variant="body2"
+                                  sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                                >
+                                  {entry.notes}
+                                </Typography>
+                                <Divider />
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                    </Box>
+                  ) : currentCaseRequest.discoveryNotes ? (
+                    <Box sx={{ display: 'flex', gap: 1.5, pl: 0.5 }}>
+                      <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                        <Box
+                          sx={{
+                            width: 9,
+                            height: 9,
+                            mt: 0.5,
+                            borderRadius: '50%',
+                            bgcolor: 'primary.main',
+                          }}
+                        />
+                      </Box>
+
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Current saved notes
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.25, whiteSpace: 'pre-wrap' }}>
+                          {currentCaseRequest.discoveryNotes}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      No discovery notes recorded yet.
+                    </Typography>
+                  )}
+                </Box>
+              </Stack>
             </Box>
 
             {currentCaseRequest.status === 'discovery_completed' && !currentCaseRequest.finalCounselorId && <Box>
@@ -458,17 +944,129 @@ export default function AdminDashboard({ currentUser }) {
             </Box>}
 
             {currentCaseRequest.finalCounselorId && ['matched', 'active'].includes(currentCaseRequest.status) && <Box>
-              <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assigned counselor</Typography>
-              <Typography variant="body2" color="text.secondary">{assignedCounselor?.name || currentCaseRequest.finalCounselorName || 'Counselor assigned'}</Typography>
-              <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Button variant="contained" onClick={() => setScheduleOpen(true)}>{scheduledCaseSession ? 'Schedule more sessions' : 'Schedule session with counselor'}</Button>{canEditScheduledSession(scheduledCaseSession) && <Button variant="outlined" onClick={() => setEditingAppointment(scheduledCaseSession)}>Edit next session</Button>}</Stack>
-              {scheduledCaseSession && <Alert severity="success" sx={{ mt: 1 }}>Session booked for {shortDate(scheduledCaseSession.date)} at {scheduledCaseSession.time} IST · {scheduledCaseSession.appointmentType || 'Consultation'}</Alert>}
+              {/* <Typography variant="subtitle2" fontWeight={750} gutterBottom>Assigned counselor</Typography> */}
+              {/* <Typography variant="body2" color="text.secondary">{assignedCounselor?.name || currentCaseRequest.finalCounselorName || 'Counselor assigned'}</Typography> */}
+              {scheduledCaseSession ? <Alert severity="success" sx={{ mt: 1, borderRadius: "8px" }}> <Box> <strong> Session booked for : </strong> {shortDate(scheduledCaseSession.date)} at {scheduledCaseSession.time} IST </Box> <Divider sx={{ m: 0.5 }} /> <Box> <strong>Type of Consultation :</strong> {scheduledCaseSession.appointmentType || 'Consultation'} </Box> </Alert> : <Button sx={{ mt: 1 }} variant="contained" onClick={() => setScheduleOpen(true)}>Schedule session with counselor</Button>}
             </Box>}
 
-            <Box><Typography variant="subtitle2" fontWeight={750} gutterBottom>Case history</Typography>
-              {!!currentCaseRequest.reviews?.length && <Stack spacing={1} sx={{ mb: 1.5 }}>{currentCaseRequest.reviews.map((review, index) => <Paper key={`${review.at}-${index}`} variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">Registration {review.decision === 'accepted' ? 'approved' : 'rejected'} · {new Date(review.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {review.actorName}</Typography>{review.reason && <Typography variant="body2">{review.reason}</Typography>}</Paper>)}</Stack>}
-              {!!currentCaseRequest.timeline?.length && <Box component="details" sx={{ mb: 1.5 }}><Typography component="summary" variant="body2" fontWeight={650} sx={{ cursor: 'pointer', mb: 1 }}>Care timeline ({currentCaseRequest.timeline.length})</Typography>{[...currentCaseRequest.timeline].reverse().map((event, index) => <Typography key={`${event.at}-${index}`} variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>{new Date(event.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · {event.actorName}: {event.note}</Typography>)}</Box>}
-              {appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).length ? <Stack spacing={1}>{appointments.filter(appointment => appointment.careRequestId === currentCaseRequest.id).map(appointment => <Paper key={appointment.id} variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2" fontWeight={700}>{appointment.date} · {appointment.time} · {appointment.status}</Typography><Typography variant="caption" color="text.secondary">{appointment.counselorName} · {appointment.appointmentKind || 'Session'}</Typography><Button component={Link} to={`/session/${appointment.id}`} size="small" sx={{ mt: 1 }}>Session details and meeting link</Button>{appointment.sessionNotes && <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{appointment.sessionNotes}</Typography>}{hasFeedback(appointment) && <Typography variant="body2" sx={{ mt: 0.5 }}>Feedback: {appointment.review.reviewText || 'No written feedback was provided.'}</Typography>}</Paper>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions recorded yet.</Typography>}
-            </Box>
+            {!!currentCaseRequest.timeline?.length && (
+              <Box component="details" sx={{ mb: 1.5 }}>
+                <Typography
+                  component="summary"
+                  variant="overline"
+                  fontWeight={650}
+                  sx={{
+                    cursor: 'pointer',
+                    mb: 1.5,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.04em',
+                    color: 'text.secondary',
+                    opacity: 0.8,
+                    fontWeight: 750,
+                    '&:hover': { color: 'text.primary' },
+                  }}
+                >
+                  Care timeline ({currentCaseRequest.timeline.length})
+                </Typography>
+
+                <Box sx={{ pl: 0.5 }}>
+                  {[...currentCaseRequest.timeline]
+                    .reverse()
+                    .map((event, index, events) => {
+                      const isLast = index === events.length - 1;
+                      const isApproved = event.status === 'accepted';
+
+                      return (
+                        <Box
+                          key={`${event.at}-${index}`}
+                          sx={{
+                            display: 'flex',
+                            gap: 1.5,
+                            position: 'relative',
+                            pb: isLast ? 0 : 2,
+                          }}
+                        >
+                          {/* Timeline icon and connecting line */}
+                          <Box
+                            sx={{
+                              width: 22,
+                              flexShrink: 0,
+                              display: 'flex',
+                              justifyContent: 'center',
+                              position: 'relative',
+                            }}
+                          >
+                            {!isLast && (
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 17,
+                                  bottom: -16,
+                                  width: 2,
+                                  bgcolor: 'divider',
+                                }}
+                              />
+                            )}
+
+                            <Box
+                              sx={{
+                                zIndex: 1,
+                                width: 17,
+                                height: 17,
+                                borderRadius: '50%',
+                                display: 'grid',
+                                placeItems: 'center',
+                                bgcolor: isApproved
+                                  ? 'success.light'
+                                  : 'action.selected',
+                                color: isApproved
+                                  ? 'success.dark'
+                                  : 'text.secondary',
+                              }}
+                            >
+                              {isApproved ? (
+                                <CheckCircleIcon sx={{ fontSize: 17 }} />
+                              ) : (
+                                <PersonIcon sx={{ fontSize: 13 }} />
+                              )}
+                            </Box>
+                          </Box>
+
+                          {/* Event details */}
+                          <Box sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            pb: 0.25,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 0.25
+                          }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ display: "flex", flexDirection: "row", justifyContent: "space-between" }}>
+                              {new Date(event.at).toLocaleString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })} <Box component="span" fontWeight={700}>
+                                Done by : {event.actorName || 'System'}
+                              </Box>
+                            </Typography>
+
+                            <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                              {event.note}
+                            </Typography>
+
+                            <Divider />
+
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                </Box>
+              </Box>
+            )}
+
           </Stack>
         </Stack>}
       </Drawer>
