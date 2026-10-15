@@ -2393,7 +2393,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
       </Box>
 
       {/* 9. BOTTOM CTA BANNER */}
-      <Box sx={{ py: { xs: 2 }, width: '100%' }}>
+      {/* <Box sx={{ py: { xs: 2 }, width: '100%' }}>
         <Container maxWidth="xl" sx={{ px: { xs: 1.5, sm: 2 } }}>
           <Box
             sx={{
@@ -2406,7 +2406,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               background: 'linear-gradient(135deg, #8774b1 0%, #4f49a4 100%)',
             }}
           >
-            {/* Concentric rings watermark */}
+            {/* Concentric rings watermark *
             <Box
               sx={{
                 position: 'absolute',
@@ -2432,7 +2432,7 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
               }}
             />
 
-            {/* <Box sx={{ position: 'relative', zIndex: 1, maxWidth: '680px' }}>
+            <Box sx={{ position: 'relative', zIndex: 1, maxWidth: '680px' }}>
 
               <Typography variant="h3" sx={{ fontFamily: 'Outfit', fontWeight: 600, fontSize: { xs: '1.9rem', sm: '2.5rem' }, mb: 2, lineHeight: 1.2 }}>
                 Ready to take the gentle first step?
@@ -2490,10 +2490,10 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
                   Learn How It Works
                 </Button>
               </Box>
-            </Box> */}
+            </Box>
           </Box>
         </Container>
-      </Box>
+      </Box> */}
 
       {/* 10. FOOTER */}
       <Box sx={{ bgcolor: '#ffffff', color: '#64748b', pt: { xs: 4 }, pb: 4, width: '100%', borderTop: '1px solid #e2e8f0' }}>
