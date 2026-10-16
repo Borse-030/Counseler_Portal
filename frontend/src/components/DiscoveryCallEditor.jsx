@@ -43,7 +43,7 @@ export default function DiscoveryCallEditor({ request, busy, completed, onSave }
     <TextField required fullWidth multiline minRows={4} label="Discovery notes" value={notes} disabled={busy} onChange={event => { setNotes(event.target.value); setSaved(false); }} slotProps={{ htmlInput: { maxLength: 10000 } }} />
     <Box>
       <Typography variant="subtitle2" fontWeight={750}>Counselling clusters & sub-concerns</Typography>
-      <Typography variant="caption" color="text.secondary">Select all concerns identified during the call. Clusters guide support and are not medical diagnoses.</Typography>
+      <Typography variant="caption" color="text.secondary">Select all concerns identified during the call.</Typography>
     </Box>
     {concerns.filter(concern => concern.clusterCode).map((concern, index) => <Paper variant="outlined" key={concern.clusterCode} sx={{ p: 1.5, borderRadius: 2 }}>
       <Typography variant="body2" fontWeight={700}>{concern.clusterCode} · {clusterByCode(concern.clusterCode)?.title}</Typography>
@@ -53,7 +53,7 @@ export default function DiscoveryCallEditor({ request, busy, completed, onSave }
     <Button size="small" variant="outlined" startIcon={<AddIcon />} disabled={busy} sx={{ alignSelf: 'flex-start' }} onClick={openPicker}>Select clusters & sub-concerns</Button>
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#fafaff' }}>
       <Typography variant="subtitle2" fontWeight={750}>Proposed session plan</Typography>
-      <Typography variant="caption" color="text.secondary">Record the user's session preference. Confirm the booking after counselor assignment.</Typography>
+      <Typography variant="caption" color="text.secondary">Record the user's session preference. </Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: sessionType === 'package' ? '1fr 0.7fr 1fr 1fr' : '1fr 1fr 1fr' }, gap: 1.5, mt: 2, '& .MuiInputBase-root': { fontSize: 13 } }}>
         <TextField size="small" required select fullWidth label="Session choice" value={sessionType} disabled={busy} onChange={event => { setSessionType(event.target.value); setSaved(false); setError(''); }}>
           <MenuItem value="" disabled>Select a session plan</MenuItem>
