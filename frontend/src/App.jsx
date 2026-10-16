@@ -265,27 +265,27 @@ function AppContent() {
     setAnchorEl(null);
   };
 
-  const renderDashboardLink = () => {
-    if (!currentUser) return null;
-    const path = currentUser.role === 'admin' ? '/admin' : '/dashboard';
-    return (
-      <Button
-        component={Link}
-        to={path}
-        startIcon={<DashboardIcon />}
-        aria-label="Dashboard"
-        sx={{
-          fontWeight: 700,
-          color: '#1e1b4b',
-          fontSize: '0.86rem',
-          textTransform: 'none',
-          '& .MuiButton-startIcon': { mr: 0.75 },
-        }}
-      >
-        Dashboard
-      </Button>
-    );
-  };
+  // const renderDashboardLink = () => {
+  //   if (!currentUser) return null;
+  //   const path = currentUser.role === 'admin' ? '/admin' : '/dashboard';
+  //   return (
+  //     <Button
+  //       component={Link}
+  //       to={path}
+  //       startIcon={<DashboardIcon />}
+  //       aria-label="Dashboard"
+  //       sx={{
+  //         fontWeight: 700,
+  //         color: '#1e1b4b',
+  //         fontSize: '0.86rem',
+  //         textTransform: 'none',
+  //         '& .MuiButton-startIcon': { mr: 0.75 },
+  //       }}
+  //     >
+  //       Dashboard123
+  //     </Button>
+  //   );
+  // };
 
   const isApproved = currentUser?.approved === true;
 
@@ -300,7 +300,7 @@ function AppContent() {
           background: "rgba(255, 255, 255, 0.52)",
           backdropFilter: "blur(12px) saturate(140%)",
           borderBottom: "1px solid rgba(255, 255, 255, 0.55)",
-          boxShadow:"0 4px 20px rgba(15, 23, 42, 0.04)",
+          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
           // transition:"background 200ms ease, boxShadow 200ms ease",
           // -webkit-backdrop-filter: blur(16px) saturate(140%);
           color: '#0f172a',
@@ -317,7 +317,7 @@ function AppContent() {
 
           {/* Right Navigation Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
-            <Box sx={{ display: ['admin', 'counselor'].includes(currentUser?.role) ? { xs: 'none', sm: 'block' } : 'block' }}>{renderDashboardLink()}</Box>
+            {/* <Box sx={{ display: ['admin', 'counselor'].includes(currentUser?.role) ? { xs: 'none', sm: 'block' } : 'block' }}>{renderDashboardLink()}</Box> */}
 
             {currentUser && notifications.length > 0 && (
               <NotificationCenter
@@ -460,10 +460,10 @@ function AppContent() {
                     sx={{ borderRadius: 2, py: 1.1, px: 1.75, fontWeight: 700, gap: 1.5, fontSize: '0.88rem', color: '#1e1b4b' }}
                   >
                     <PersonOutlinedIcon fontSize="small" sx={{ color: '#0d9488' }} />
-                    My Profile View
+                    My Profile
                   </MenuItem>
 
-                  {currentUser.role === 'admin' && (
+                  {/* {currentUser.role === 'admin' && (
                     <MenuItem
                       component={Link}
                       to="/admin"
@@ -473,7 +473,7 @@ function AppContent() {
                       <AdminPanelSettingsIcon fontSize="small" sx={{ color: '#3b82f6' }} />
                       Admin Console
                     </MenuItem>
-                  )}
+                  )} */}
 
                   <Divider sx={{ my: 0.75 }} />
 
