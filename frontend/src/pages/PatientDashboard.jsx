@@ -211,7 +211,7 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 70px)', py: 12 }}>
         <CircularProgress size={60} />
       </Box>
     );
@@ -222,7 +222,8 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
 
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+    <Box sx={{ minHeight: 'calc(100vh - 70px)', py: { xs: 2, md: 3 } }}>
+      <Container maxWidth="lg">
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
 
@@ -1207,5 +1208,6 @@ export default function PatientDashboard({ currentUser, onUserUpdated }) {
         </DialogContent>
       </Dialog>
     </Container>
+    </Box>
   );
 }

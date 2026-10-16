@@ -48,7 +48,10 @@ export default function SessionRoom({ currentUser }) {
   };
   const safeLink = status === 'upcoming' ? attendanceLink(appointment) : '';
   const offline = appointment?.appointmentType === 'In-Person Consultation';
-  return <Container maxWidth="lg" sx={{ py: 4 }}><Stack spacing={3}>
+  return (
+    <Box sx={{ minHeight: 'calc(100vh - 70px)', py: 4 }}>
+      <Container maxWidth="lg">
+        <Stack spacing={3}>
     <Button component={Link} to={currentUser.role === 'admin' ? '/admin' : '/dashboard'} sx={{ alignSelf: 'flex-start' }}>Back to dashboard</Button>
     {error && <Alert severity="error">{error}</Alert>}
     {success && <Alert severity="success">{success}</Alert>}
@@ -85,5 +88,8 @@ export default function SessionRoom({ currentUser }) {
     </Stack></CardContent></Card>}
     {outcomeOpen && appointment && <SessionOutcomeDialog appointment={{ ...appointment, status }} isAdmin={isAdmin} onClose={() => setOutcomeOpen(false)} onSaved={(updated, message) => { setAppointment(updated); setOutcomeOpen(false); setSuccess(message); }} />}
     {staff && appointment?.careRequestId && <CareWorkflow currentUser={currentUser} requestId={appointment.careRequestId} />}
-  </Stack></Container>;
+        </Stack>
+      </Container>
+    </Box>
+  );
 }

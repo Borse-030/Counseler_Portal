@@ -290,19 +290,28 @@ function AppContent() {
   const isApproved = currentUser?.approved === true;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+        bgcolor: '#f8fafc',
+        backgroundImage: 'radial-gradient(circle at 10% 12%, rgba(243, 232, 255, 0.55) 0%, rgba(248, 250, 252, 0.95) 45%, #f8fafc 100%)',
+        backgroundAttachment: 'fixed',
+        color: '#0f172a',
+      }}
+    >
       {/* Top Navbar */}
       <AppBar
         position="sticky"
         elevation={0}
-        className='glass-navbar'
+        className="glass-navbar"
         sx={{
-          background: "rgba(255, 255, 255, 0.52)",
-          backdropFilter: "blur(12px) saturate(140%)",
-          borderBottom: "1px solid rgba(255, 255, 255, 0.55)",
-          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
-          // transition:"background 200ms ease, boxShadow 200ms ease",
-          // -webkit-backdrop-filter: blur(16px) saturate(140%);
+          background: 'rgba(255, 255, 255, 0.65)',
+          backdropFilter: 'blur(16px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(140%)',
+          borderBottom: '1px solid rgba(226, 232, 240, 0.7)',
+          boxShadow: '0 4px 20px rgba(15, 23, 42, 0.03)',
           color: '#0f172a',
         }}
       >

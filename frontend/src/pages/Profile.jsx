@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Box, Container, Typography, Grid, Card, Button, Avatar,
@@ -140,8 +140,7 @@ export default function Profile({ currentUser, onUserUpdated }) {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
-        bgcolor: '#f8fafc',
+        minHeight: 'calc(100vh - 70px)',
         py: { xs: 3, md: 5 },
       }}
     >

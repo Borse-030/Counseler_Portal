@@ -61,7 +61,8 @@ export default function SessionRequest({ currentUser, onAuthRedirect }) {
 
   if (!currentUser) {
     return (
-      <Container maxWidth="sm" sx={{ py: { xs: 5, md: 9 } }}>
+      <Box sx={{ minHeight: 'calc(100vh - 70px)', display: 'flex', alignItems: 'center', justifyContent: 'center', py: { xs: 5, md: 9 } }}>
+        <Container maxWidth="sm">
         <Card>
           <CardContent sx={{ p: { xs: 3, md: 5 }, textAlign: 'center' }}>
             <CalendarMonthIcon color="primary" sx={{ fontSize: 40, mb: 1.5 }} />
@@ -71,16 +72,24 @@ export default function SessionRequest({ currentUser, onAuthRedirect }) {
           </CardContent>
         </Card>
       </Container>
+    </Box>
     );
   }
 
   if (!['patient', 'user'].includes(currentUser.role)) {
-    return <Container maxWidth="sm" sx={{ py: 6 }}><Alert severity="info">Session requests are available to patients.</Alert></Container>;
+    return (
+      <Box sx={{ minHeight: 'calc(100vh - 70px)', display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+        <Container maxWidth="sm">
+          <Alert severity="info">Session requests are available to patients.</Alert>
+        </Container>
+      </Box>
+    );
   }
 
   if (requestReference) {
     return (
-      <Container maxWidth="md" sx={{ py: { xs: 4, md: 7 } }}>
+      <Box sx={{ minHeight: 'calc(100vh - 70px)', display: 'flex', alignItems: 'center', justifyContent: 'center', py: { xs: 4, md: 7 } }}>
+        <Container maxWidth="md">
         <Card>
           <CardContent sx={{ p: { xs: 3, md: 5 }, textAlign: 'center' }}>
             <CheckCircleIcon color="success" sx={{ fontSize: 52, mb: 1.5 }} />
@@ -97,11 +106,13 @@ export default function SessionRequest({ currentUser, onAuthRedirect }) {
           </CardContent>
         </Card>
       </Container>
+    </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
+    <Box sx={{ minHeight: 'calc(100vh - 70px)', py: { xs: 3, md: 5 } }}>
+      <Container maxWidth="lg">
       <Box sx={{ mb: 3.5, maxWidth: 760 }}>
         <Typography variant="overline" color="primary" sx={{ fontWeight: 700, letterSpacing: 1 }}>CARE TEAM REQUEST</Typography>
         <Typography variant="h3" sx={{ fontFamily: 'Outfit', fontWeight: 800, mb: 1 }}>Request a session</Typography>
@@ -179,5 +190,6 @@ export default function SessionRequest({ currentUser, onAuthRedirect }) {
         </Grid>
       </Grid>
     </Container>
+  </Box>
   );
 }

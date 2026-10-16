@@ -579,12 +579,10 @@ export default function LandingPage({ onAuthRedirect, onOpenRegisterAuth }) {
   return (
     <Box
       sx={{
-        background: 'radial-gradient(circle at 10% 15%, rgba(243, 232, 255, 0.65) 0%, rgba(248, 250, 252, 0.96) 80%), url(/registration-bg.png)',
-        backgroundSize: 'cover',
+        background: 'radial-gradient(circle at 10% 15%, rgba(243, 232, 255, 0.65) 0%, rgba(248, 250, 252, 0.96) 80%)',
         backgroundAttachment: 'fixed',
-        backgroundRepeat: 'no-repeat',
         color: '#1e1b4b',
-        minHeight: '100vh',
+        minHeight: 'calc(100vh - 70px)',
         overflowX: 'hidden',
         width: '100%',
       }}

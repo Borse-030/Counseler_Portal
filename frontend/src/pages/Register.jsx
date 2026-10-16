@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Box, Container, Card, Typography, TextField, Button,
@@ -492,7 +492,7 @@ export default function Register({ onAuthSuccess, onOpenAuth, currentUser }) {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        minHeight: 'calc(100vh - 70px)',
         py: { xs: 3, sm: 6 },
         background: 'radial-gradient(circle at 10% 20%, rgba(243, 232, 255, 0.65) 0%, rgba(248, 250, 252, 0.94) 85%), url(/registration-bg.png)',
         backgroundSize: 'cover',

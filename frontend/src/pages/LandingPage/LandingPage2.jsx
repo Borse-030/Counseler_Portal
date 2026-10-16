@@ -281,7 +281,7 @@ const LandingPage = () => {
 	return (
 		<Box
 			sx={{
-				minHeight: "100vh",
+				minHeight: "calc(100vh - 70px)",
 				backgroundColor: "#F8F7F3",
 				color: "#252525",
 			}}
